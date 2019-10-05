@@ -73,7 +73,7 @@ class Konnect(LineReceiver):
           info("It is a new device ""%s""" % self.name)
       else:
         info("%s uses an old protocol version, this won't work" % self.name)
-        self.abortConnection()
+        self.transport.abortConnection()
     elif packet.istype(PacketType.PAIR):
       if packet.get("pair") == True:
         if self.factory.database.isDeviceTrusted(self.identifier):
@@ -115,28 +115,41 @@ class KonnectFactory(Factory):
   def __init__(self, identifier):
     self.identifier = identifier
 
+  def _findClient(self, identifier):
+    for client in self.clients:
+      if client.identifier != identifier:
+        continue
+
+      return client
+
+    return None
+
   def sendPing(self, identifier):
     if not self.database.isDeviceTrusted(identifier):
       return None
 
-    for client in self.clients:
-      if client.identifier != identifier:
-        continue
-
-      client.sendPing()
+    try:
+      self._findClient(identifier).sendPing()
       return True
+    except NoneType:
+      return False
 
-    return None
+  def sendNotification(self, identifier, text, title, app):
+    if not self.database.isDeviceTrusted(identifier):
+      return None
+
+    try:
+      self._findClient(identifier).sendNotification(text, title, app)
+      return True
+    except NoneType:
+      return False
 
   def requestPair(self, identifier):
-    for client in self.clients:
-      if client.identifier != identifier:
-        continue
-
-      client.requestPair()
+    try:
+      self._findClient(identifier).requestPair()
       return not self.database.isDeviceTrusted(identifier)
-
-    return None
+    except NoneType:
+      return None
 
   def isDeviceTrusted(self, identifier):
     return self.database.isDeviceTrusted(identifier)
@@ -154,7 +167,7 @@ class KonnectFactory(Factory):
     return devices
 
   def startFactory(self):
-    certificate = open("certificate.pem", "rb").read() + open("privatekey.pem", "rb").read()
+    certificate = open("certificate.pem", "rb").read() + open("privateKey.pem", "rb").read()
     pem = PrivateCertificate.loadPEM(certificate)
     self.options = pem.options()
     self.database = Database(self.identifier)

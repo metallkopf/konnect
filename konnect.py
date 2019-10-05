@@ -2,9 +2,11 @@
 
 from twisted.internet import reactor
 from twisted.web.server import Site
+from os.path import exists
 from logging import basicConfig, DEBUG, INFO, info
 from protocols import KonnectFactory, Discovery
 from api import API
+from cert import generate_selfsigned
 
 
 if __name__ == "__main__":
@@ -12,6 +14,8 @@ if __name__ == "__main__":
 
   identifier = "test"
   device = "Test"
+
+  generate_selfsigned(identifier)
 
   factory = KonnectFactory(identifier)
   reactor.listenTCP(1764, factory)

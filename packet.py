@@ -59,9 +59,9 @@ class Packet:
     return packet
 
   @staticmethod
-  def createNotification(text, title="", app="", identifier=None, clearable=False):
+  def createNotification(text, title="", app="", clearable=False):
     packet = Packet(PacketType.NOTIFICATION)
-    packet.set("id", identifier if identifier else packet.payload["id"])
+    packet.set("id", packet.payload["id"])
     packet.set("appName", app)
     packet.set("title", title)
     packet.set("text", text)
