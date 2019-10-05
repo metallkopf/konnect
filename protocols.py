@@ -3,78 +3,110 @@
 from twisted.internet.protocol import Factory, DatagramProtocol
 from twisted.protocols.basic import LineReceiver
 from twisted.internet.ssl import Certificate, PrivateCertificate
-from packet import Packet
+from logging import debug, info, warning, error
+from packet import Packet, PacketType
 from database import Database
 
 
+class InternalStatus:
+  NOT_PAIRED = 1
+  REQUESTED = 2
+  PAIRED = 3
+
 class Konnect(LineReceiver):
   delimiter = b"\n"
-  pairing = False
-  secure = False
+  status = InternalStatus.NOT_PAIRED
+  notify = False
 
   def connectionMade(self):
     self.factory.clients.add(self)
     peer = self.transport.getPeer()
-    self.address = (peer.host, peer.port)
+    self.address = "{}:{}".format(peer.host, peer.port)
 
   def connectionLost(self, reason):
     self.factory.clients.remove(self)
 
   def _sendPacket(self, data):
-    print("sendto", self.address, data)
+    debug("SendTo(%s) - %s", self.address, data)
     self.sendLine(bytes(data))
 
   def sendPing(self):
-    ping = Packet(Packet.PING)
+    ping = Packet.createPing()
     self._sendPacket(ping)
 
   def sendNotification(self, text, title, app):
-    notification = Packet.create_notification(text, title, app)
+    notification = Packet.createNotification(text, title, app)
     self._sendPacket(notification)
+
+  def requestPair(self):
+    pair = Packet.createPair(True)
+    self._sendPacket(pair)
+    self.status = InternalStatus.REQUESTED
+
+  def requestUnpair(self):
+    pair = Packet.createPair(False)
+    self._sendPacket(pair)
+    self.factory.database.unpairDevice(self.identifier)
+    self.status = InternalStatus.NOT_PAIRED
 
   def lineReceived(self, line):
     packet = Packet.load(line)
-    print("recvfrom", self.address, packet)
+    debug("RecvFrom(%s) - %s", self.address, packet)
 
-    if not packet.istype(Packet.IDENTITY) and not self.secure:
-      self.transport.abortConnection()
+    if not packet.istype(PacketType.IDENTITY) and not self.transport.TLS:
+      info("discard non encrypted packet")
+      return
 
-    if packet.istype(Packet.IDENTITY):
+    if packet.istype(PacketType.IDENTITY):
       self.identifier = packet.get("deviceId")
       self.name = packet.get("deviceName")
       self.device = packet.get("deviceType")
-      self.transport.startTLS(self.factory.options, False)
-      self.secure = True
 
-      if not self.factory.database.deviceExists(self.identifier):
-        pair = Packet.create_pair(True)
-        self._sendPacket(pair)
-        self.pairing = True
-    elif packet.istype(Packet.PAIR):
-      if packet.get("pair") == True:
-        if self.pairing:
-          print("paired")
-          certificate = Certificate(self.transport.getPeerCertificate()).dumpPEM()
-          self.factory.database.pairDevice(self.identifier, certificate)
+      if packet.get("protocolVersion") == Packet.PROTOCOL_VERSION:
+        info("Starting client ssl (but I'm the server TCP socket)")
+        self.transport.startTLS(self.factory.options, False)
+        info("Socket succesfully stablished an SSL connection")
+
+        if self.factory.database.isDeviceTrusted(self.identifier):
+          info("It is a known device ""%s""" % self.name)
         else:
-          print("unpairing")
-          pair = Packet.create_pair(False)
-          self._sendPacket(pair)
-          self.transport.abortConnection()
+          info("It is a new device ""%s""" % self.name)
       else:
-        print("unpaired")
-        self.factory.database.unpairDevice(self.identifier)
-        self.transport.abortConnection()
-    elif packet.istype(Packet.REQUEST):
-      print("send notifications", packet.get("request"))
+        info("%s uses an old protocol version, this won't work" % self.name)
+        self.abortConnection()
+    elif packet.istype(PacketType.PAIR):
+      if packet.get("pair") == True:
+        if self.factory.database.isDeviceTrusted(self.identifier):
+          info("already paired")
+          self.requestPair()
+          #self.status = InternalStatus.PAIRED
+        elif self.status == InternalStatus.REQUESTED:
+          debug("pair answer")
+          certificate = Certificate(self.transport.getPeerCertificate()).dumpPEM()
+          self.factory.database.pairDevice(self.identifier, certificate, self.name, self.device)
+          self.status = InternalStatus.PAIRED
+        else:
+          info("pairing started by the other end, rejecting their request")
+          self.requestUnpair()
+      else:
+        debug("unpair request")
+        self.requestUnpair()
 
-      if self.factory.database.deviceExists(self.identifier):
+        if self.status == InternalStatus.REQUESTED:
+          info("canceled by other peer")
+    elif packet.istype(PacketType.REQUEST):
+      debug("registered notifications listener")
+
+      if self.factory.database.isDeviceTrusted(self.identifier):
         if packet.get("request") == True:
-          self.sendNotification("text", "title", "appName")
-      else:
-        print("ignore notifications")
-    elif packet.istype(Packet.PING):
+          self.factory.database.updateDevice(self.identifier, self.name, self.device)
+          self.notify = True
+        else:
+          self.notify = False
+    elif packet.istype(PacketType.PING):
       self.sendPing()
+    else:
+      info("discarding unsupported packet")
 
 class KonnectFactory(Factory):
   protocol = Konnect
@@ -83,15 +115,42 @@ class KonnectFactory(Factory):
   def __init__(self, identifier):
     self.identifier = identifier
 
-  def sendPings(self):
+  def sendPing(self, identifier):
+    if not self.database.isDeviceTrusted(identifier):
+      return None
+
     for client in self.clients:
+      if client.identifier != identifier:
+        continue
+
       client.sendPing()
+      return True
+
+    return None
+
+  def requestPair(self, identifier):
+    for client in self.clients:
+      if client.identifier != identifier:
+        continue
+
+      client.requestPair()
+      return not self.database.isDeviceTrusted(identifier)
+
+    return None
+
+  def isDeviceTrusted(self, identifier):
+    return self.database.isDeviceTrusted(identifier)
 
   def getDevices(self):
-    devices = []
+    devices = {}
+
+    for trusted in self.database.getTrustedDevices():
+      devices[trusted["identifier"]] = {"name": trusted["name"], "type": trusted["type"], "reachable": False, "trusted": True}
+
     for client in self.clients:
-      devices.append({"id": client.identifier, "name": client.name,
-                      "type": client.device})
+      trusted = client.identifier in devices
+      devices[client.identifier] = {"name": client.name, "type": client.device, "reachable": True, "trusted": trusted}
+
     return devices
 
   def startFactory(self):
@@ -107,6 +166,7 @@ class Discovery(DatagramProtocol):
 
   def startProtocol(self):
     self.transport.setBroadcastAllowed(True)
-    packet = Packet.create_identity(self.identifier, self.device)
-    print(packet)
+    packet = Packet.createIdentity(self.identifier, self.device)
+    info("broadcasting identity packet")
     self.transport.write(bytes(packet), ("<broadcast>", 1716))
+    debug(packet)

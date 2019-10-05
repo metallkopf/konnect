@@ -4,12 +4,15 @@ from time import time
 from json import loads, dumps
 
 
-class Packet:
+class PacketType:
   IDENTITY = "kdeconnect.identity"
   PAIR = "kdeconnect.pair"
   NOTIFICATION = "kdeconnect.notification"
   REQUEST = "kdeconnect.notification.request"
   PING = "kdeconnect.ping"
+
+class Packet:
+  PROTOCOL_VERSION = 7
 
   def __init__(self, _type=None):
     self.payload = {}
@@ -33,31 +36,31 @@ class Packet:
     return self.payload["body"].get(key, default)
 
   def istype(self, _type):
-    return self.payload["type"] == _type
+    return self.payload.get("type") == _type
 
   @staticmethod
-  def create_identity(identifier, name="unnamed", device="desktop", port=1764):
-    packet = Packet(Packet.IDENTITY)
-    packet.set("protocolVersion", 7)
+  def createIdentity(identifier, name="unnamed", device="desktop", port=1764):
+    packet = Packet(PacketType.IDENTITY)
+    packet.set("protocolVersion", Packet.PROTOCOL_VERSION)
     packet.set("deviceId", identifier)
     packet.set("deviceName", name)
     packet.set("deviceType", device)
     packet.set("tcpPort", port)
-    packet.set("incomingCapabilities", [Packet.PING])
-    packet.set("outgoingCapabilities", [Packet.NOTIFICATION, Packet.PING])
+    packet.set("incomingCapabilities", [PacketType.PING])
+    packet.set("outgoingCapabilities", [PacketType.NOTIFICATION, PacketType.PING])
 
     return packet
 
   @staticmethod
-  def create_pair(pairing=True):
-    packet = Packet(Packet.PAIR)
+  def createPair(pairing):
+    packet = Packet(PacketType.PAIR)
     packet.set("pair", pairing)
 
     return packet
 
   @staticmethod
-  def create_notification(text, title="", app="", identifier=None, clearable=False):
-    packet = Packet(Packet.NOTIFICATION)
+  def createNotification(text, title="", app="", identifier=None, clearable=False):
+    packet = Packet(PacketType.NOTIFICATION)
     packet.set("id", identifier if identifier else packet.payload["id"])
     packet.set("appName", app)
     packet.set("title", title)
@@ -65,6 +68,10 @@ class Packet:
     packet.set("isClearable", clearable)
 
     return packet
+
+  @staticmethod
+  def createPing():
+    return Packet(PacketType.PING)
 
   @staticmethod
   def load(payload):
