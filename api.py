@@ -3,7 +3,7 @@
 from twisted.web.resource import Resource
 from json import dumps, loads
 from json.decoder import JSONDecodeError
-from logging import debug, info, warning, error
+from logging import debug, info, warning, error, exception
 
 
 class API(Resource):
