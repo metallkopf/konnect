@@ -14,10 +14,14 @@ class PacketType:
 
 class Packet:
   PROTOCOL_VERSION = 7
+  DEVICE_TYPE = "desktop"
 
   def __init__(self, _type=None):
     self.payload = {}
-    self.payload["id"] = round(time() * 1000)
+    if _type is None:
+      self.payload["id"] = None
+    else:
+      self.payload["id"] = round(time() * 1000)
     self.payload["type"] = _type
     self.payload["body"] = {}
 
@@ -40,12 +44,12 @@ class Packet:
     return self.payload.get("type") == _type
 
   @staticmethod
-  def createIdentity(identifier, name="unnamed", device="desktop", port=1764):
+  def createIdentity(identifier, name, port=1764):
     packet = Packet(PacketType.IDENTITY)
     packet.set("protocolVersion", Packet.PROTOCOL_VERSION)
     packet.set("deviceId", identifier)
     packet.set("deviceName", name)
-    packet.set("deviceType", device)
+    packet.set("deviceType", Packet.DEVICE_TYPE)
     packet.set("tcpPort", port)
     packet.set("incomingCapabilities", [PacketType.PING])
     packet.set("outgoingCapabilities", [PacketType.NOTIFICATION, PacketType.PING])
@@ -77,6 +81,6 @@ class Packet:
   @staticmethod
   def load(payload):
     packet = Packet()
-    packet.payload = loads(payload)
+    packet.payload.update(loads(payload))
 
     return packet

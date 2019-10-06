@@ -8,7 +8,7 @@ from cryptography.x509.oid import NameOID
 from cryptography.hazmat.primitives.hashes import SHA256
 from datetime import datetime, timedelta
 from os.path import exists
-from logging import debug, info, warning, error
+from logging import debug, info, warning, error, exception
 
 
 CERT_FILE = "certificate.pem"

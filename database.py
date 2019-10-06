@@ -4,35 +4,23 @@ from sqlite3 import connect, OperationalError, Row
 
 
 class Database:
-  def __init__(self, identifier):
+  def __init__(self):
     self.instance = connect("konnect.db", isolation_level=None, check_same_thread=False)
     self.instance.row_factory = Row
-    self._upgradeSchema(identifier)
+    self._upgradeSchema()
 
-  def _upgradeSchema(self, identifier):
-    version = 0
-
-    try:
-      query = "SELECT value FROM config WHERE key = ? LIMIT 1"
-      version = int(self.instance.execute(query, ("schema", )).fetchone()[0])
-    except (OperationalError, TypeError) as e:
-      pass
+  def _upgradeSchema(self):
+    version = int(self.loadConfig("schema", 0))
 
     if version == 0:
       version = 1
 
-      query = "CREATE TABLE config (key TEXT PRIMARY KEY, value TEXT)"
-      self.instance.execute(query)
+      queries = ["CREATE TABLE config (key TEXT PRIMARY KEY, value TEXT)",
+                 "CREATE TABLE trusted_devices (identifier TEXT PRIMARY KEY, certificate TEXT)"]
+      for query in queries:
+        self.instance.execute(query)
 
-      query = "INSERT INTO config VALUES (?, ?)"
-      self.instance.execute(query, ("schema", "1"))
-
-      query = "INSERT INTO config VALUES (?, ?)"
-      self.instance.execute(query, ("myself", identifier))
-
-      query = "CREATE TABLE trusted_devices (identifier TEXT PRIMARY KEY, certificate TEXT)"
-      self.instance.execute(query)
-
+      self.saveConfig("schema", version)
 
     if version == 1:
       version = 2
@@ -42,12 +30,18 @@ class Database:
       for query in queries:
         self.instance.execute(query)
 
-      query = "UPDATE config SET value = ? WHERE key = ?"
-      self.instance.execute(query, ("schema", "2"))
+      self.saveConfig("schema", version)
 
+  def loadConfig(self, key, default=None):
+    try:
+      query = "SELECT value FROM config WHERE key = ? LIMIT 1"
+      return self.instance.execute(query, (key, )).fetchone()[0]
+    except (OperationalError, TypeError):
+      return default
 
-    query = "UPDATE config SET value = ? WHERE key = ?"
-    self.instance.execute(query, (identifier, "myself"))
+  def saveConfig(self, key, value):
+    query = "INSERT INTO config (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value"
+    self.instance.execute(query, (key, value))
 
   def isDeviceTrusted(self, identifier):
     query = "SELECT COUNT(1) FROM trusted_devices WHERE identifier = ?"
@@ -57,11 +51,11 @@ class Database:
     query = "SELECT identifier, name, type FROM trusted_devices"
     return self.instance.execute(query).fetchall()
 
-  def updateDevice(self, identifier, name="unnamed", device="unknown"):
+  def updateDevice(self, identifier, name, device):
     query = "UPDATE trusted_devices SET name = ?, type = ? WHERE identifier = ?"
     self.instance.execute(query, (name, device, identifier))
 
-  def pairDevice(self, identifier, certificate, name="unnamed", device="unknown"):
+  def pairDevice(self, identifier, certificate, name, device):
     query = "INSERT INTO trusted_devices (identifier, certificate, name, type) VALUES (?, ?, ?, ?)"
     self.instance.execute(query, (identifier, certificate, name, device))
 

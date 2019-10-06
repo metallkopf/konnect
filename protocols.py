@@ -4,9 +4,8 @@ from twisted.internet.protocol import Factory, DatagramProtocol
 from twisted.protocols.basic import LineReceiver
 from twisted.internet.ssl import Certificate, PrivateCertificate
 from twisted.internet.reactor import callLater
-from logging import debug, info, warning, error
+from logging import debug, info, warning, error, exception
 from packet import Packet, PacketType
-from database import Database
 
 
 class InternalStatus:
@@ -62,13 +61,19 @@ class Konnect(LineReceiver):
     self.timeout = callLater(10, self.requestUnpair)
 
   def _cancelTimeout(self):
-    if self.timeout is not None and self.timeout.active():
-      self.timeout.cancel()
-      self.timeout = None
+    if self.timeout is not None:
+      if self.timeout.active():
+        self.timeout.cancel()
+        self.timeout = None
 
   def lineReceived(self, line):
-    packet = Packet.load(line)
-    debug("RecvFrom(%s) - %s", self.address, packet)
+    try:
+      packet = Packet.load(line)
+      debug("RecvFrom(%s) - %s", self.address, packet)
+    except JSONDecodeError as e:
+      error("Unserialization error: %s" % line)
+      exception(e)
+      return
 
     if not packet.istype(PacketType.IDENTITY) and not self.transport.TLS:
       info("Discard non encrypted packet")
@@ -80,14 +85,14 @@ class Konnect(LineReceiver):
       self.device = packet.get("deviceType")
 
       if packet.get("protocolVersion") == Packet.PROTOCOL_VERSION:
-        info("Starting client SSL (but i'm the server TCP socket)")
+        info("Starting client ssl (but I'm the server TCP socket)")
         self.transport.startTLS(self.factory.options, False)
         info("Socket succesfully stablished an SSL connection")
 
         if self.factory.database.isDeviceTrusted(self.identifier):
-          info("It is a known device ""%s""" % self.name)
+          info("It is a known device \"%s\"" % self.name)
         else:
-          info("It is a new device ""%s""" % self.name)
+          info("It is a new device \"%s\"" % self.name)
       else:
         info("%s uses an old protocol version, this won't work" % self.name)
         self.transport.abortConnection()
@@ -132,7 +137,8 @@ class KonnectFactory(Factory):
   protocol = Konnect
   clients = set()
 
-  def __init__(self, identifier):
+  def __init__(self, database, identifier):
+    self.database = database
     self.identifier = identifier
 
   def _findClient(self, identifier):
@@ -190,7 +196,6 @@ class KonnectFactory(Factory):
     certificate = open("certificate.pem", "rb").read() + open("privateKey.pem", "rb").read()
     pem = PrivateCertificate.loadPEM(certificate)
     self.options = pem.options()
-    self.database = Database(self.identifier)
 
 
 class Discovery(DatagramProtocol):
