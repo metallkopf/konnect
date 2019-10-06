@@ -11,6 +11,7 @@ class PacketType:
   REQUEST = "kdeconnect.notification.request"
   PING = "kdeconnect.ping"
 
+
 class Packet:
   PROTOCOL_VERSION = 7
 

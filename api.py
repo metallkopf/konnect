@@ -46,7 +46,7 @@ class API(Resource):
         data = loads(request.content.read())
       except JSONDecodeError:
         request.setResponseCode(400)
-        return b""
+        return dumps({"success": False, "message": "unserialization error"}).encode()
 
       identifier = self.uri[1:].split("/", 1)[-1]
 
@@ -89,7 +89,7 @@ class API(Resource):
         data = loads(request.content.read())
       except JSONDecodeError:
         request.setResponseCode(400)
-        return b""
+        return dumps({"success": False, "message": "unserialization error"}).encode()
 
       identifier = self.uri[1:].split("/", 1)[-1]
 

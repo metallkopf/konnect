@@ -3,6 +3,7 @@
 from twisted.internet.protocol import Factory, DatagramProtocol
 from twisted.protocols.basic import LineReceiver
 from twisted.internet.ssl import Certificate, PrivateCertificate
+from twisted.internet.reactor import callLater
 from logging import debug, info, warning, error
 from packet import Packet, PacketType
 from database import Database
@@ -13,10 +14,15 @@ class InternalStatus:
   REQUESTED = 2
   PAIRED = 3
 
+
 class Konnect(LineReceiver):
   delimiter = b"\n"
   status = InternalStatus.NOT_PAIRED
   notify = False
+  identifier = None
+  name = "unnamed"
+  device = "unknown"
+  timeout = None
 
   def connectionMade(self):
     self.factory.clients.add(self)
@@ -40,21 +46,32 @@ class Konnect(LineReceiver):
 
   def requestPair(self):
     pair = Packet.createPair(True)
+    self._createTimeout()
     self._sendPacket(pair)
     self.status = InternalStatus.REQUESTED
 
   def requestUnpair(self):
     pair = Packet.createPair(False)
+    self._cancelTimeout()
     self._sendPacket(pair)
     self.factory.database.unpairDevice(self.identifier)
     self.status = InternalStatus.NOT_PAIRED
+
+  def _createTimeout(self):
+    self._cancelTimeout()
+    self.timeout = callLater(10, self.requestUnpair)
+
+  def _cancelTimeout(self):
+    if self.timeout is not None and self.timeout.active():
+      self.timeout.cancel()
+      self.timeout = None
 
   def lineReceived(self, line):
     packet = Packet.load(line)
     debug("RecvFrom(%s) - %s", self.address, packet)
 
     if not packet.istype(PacketType.IDENTITY) and not self.transport.TLS:
-      info("discard non encrypted packet")
+      info("Discard non encrypted packet")
       return
 
     if packet.istype(PacketType.IDENTITY):
@@ -63,7 +80,7 @@ class Konnect(LineReceiver):
       self.device = packet.get("deviceType")
 
       if packet.get("protocolVersion") == Packet.PROTOCOL_VERSION:
-        info("Starting client ssl (but I'm the server TCP socket)")
+        info("Starting client SSL (but i'm the server TCP socket)")
         self.transport.startTLS(self.factory.options, False)
         info("Socket succesfully stablished an SSL connection")
 
@@ -75,27 +92,29 @@ class Konnect(LineReceiver):
         info("%s uses an old protocol version, this won't work" % self.name)
         self.transport.abortConnection()
     elif packet.istype(PacketType.PAIR):
+      self._cancelTimeout()
+
       if packet.get("pair") == True:
         if self.factory.database.isDeviceTrusted(self.identifier):
-          info("already paired")
+          info("Already paired")
           self.requestPair()
           #self.status = InternalStatus.PAIRED
         elif self.status == InternalStatus.REQUESTED:
-          debug("pair answer")
+          info("Pair answer")
           certificate = Certificate(self.transport.getPeerCertificate()).dumpPEM()
           self.factory.database.pairDevice(self.identifier, certificate, self.name, self.device)
           self.status = InternalStatus.PAIRED
         else:
-          info("pairing started by the other end, rejecting their request")
+          info("Pairing started by the other end, rejecting their request")
           self.requestUnpair()
       else:
-        debug("unpair request")
+        info("Unpair request")
         self.requestUnpair()
 
         if self.status == InternalStatus.REQUESTED:
-          info("canceled by other peer")
+          info("Canceled by other peer")
     elif packet.istype(PacketType.REQUEST):
-      debug("registered notifications listener")
+      info("Registered notifications listener")
 
       if self.factory.database.isDeviceTrusted(self.identifier):
         if packet.get("request") == True:
@@ -106,7 +125,8 @@ class Konnect(LineReceiver):
     elif packet.istype(PacketType.PING):
       self.sendPing()
     else:
-      info("discarding unsupported packet")
+      warning("Discarding unsupported packet %s for %s" % (packet.payload.get("type"), self.name))
+
 
 class KonnectFactory(Factory):
   protocol = Konnect
@@ -172,14 +192,15 @@ class KonnectFactory(Factory):
     self.options = pem.options()
     self.database = Database(self.identifier)
 
+
 class Discovery(DatagramProtocol):
-  def __init__(self, identifier, device):
+  def __init__(self, identifier, name):
     self.identifier = identifier
-    self.device = device
+    self.name = name
 
   def startProtocol(self):
     self.transport.setBroadcastAllowed(True)
-    packet = Packet.createIdentity(self.identifier, self.device)
-    info("broadcasting identity packet")
+    packet = Packet.createIdentity(self.identifier, self.name)
+    info("Broadcasting identity packet")
     self.transport.write(bytes(packet), ("<broadcast>", 1716))
     debug(packet)

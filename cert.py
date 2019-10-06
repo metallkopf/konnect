@@ -8,6 +8,7 @@ from cryptography.x509.oid import NameOID
 from cryptography.hazmat.primitives.hashes import SHA256
 from datetime import datetime, timedelta
 from os.path import exists
+from logging import debug, info, warning, error
 
 
 CERT_FILE = "certificate.pem"
@@ -18,6 +19,7 @@ def generate_selfsigned(identifier):
   if exists(CERT_FILE) and exists(KEY_FILE):
     return
 
+  debug("Generating private key")
   key = generate_private_key(65537, 2048, default_backend())
 
   with open(KEY_FILE, "wb") as pem:
@@ -31,6 +33,7 @@ def generate_selfsigned(identifier):
 
   before = datetime.utcnow() - timedelta(days=365)
   after = before + timedelta(days=3650)
+  debug("Generating certificate")
   cert = CertificateBuilder().subject_name(subject).issuer_name(issuer).\
     public_key(key.public_key()).serial_number(1).not_valid_before(before).\
     not_valid_after(after).sign(key, SHA256(), default_backend())
