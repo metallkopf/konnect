@@ -35,7 +35,7 @@ class Database:
   def loadConfig(self, key, default=None):
     try:
       query = "SELECT value FROM config WHERE key = ? LIMIT 1"
-      return self.instance.execute(query, (key, )).fetchone()[0]
+      return self.instance.execute(query, (key,)).fetchone()[0]
     except (OperationalError, TypeError):
       return default
 
@@ -45,7 +45,7 @@ class Database:
 
   def isDeviceTrusted(self, identifier):
     query = "SELECT COUNT(1) FROM trusted_devices WHERE identifier = ?"
-    return bool(self.instance.execute(query, (identifier, )).fetchone()[0])
+    return bool(self.instance.execute(query, (identifier,)).fetchone()[0])
 
   def getTrustedDevices(self):
     query = "SELECT identifier, name, type FROM trusted_devices"
@@ -62,4 +62,4 @@ class Database:
 
   def unpairDevice(self, identifier):
     query = "DELETE FROM trusted_devices WHERE identifier = ?"
-    self.instance.execute(query, (identifier, ))
+    self.instance.execute(query, (identifier,))
