@@ -1,10 +1,13 @@
 #!/usr/bin/env python3
 
-from twisted.internet.protocol import Factory, DatagramProtocol
-from twisted.protocols.basic import LineReceiver
-from twisted.internet.ssl import Certificate
+from json.decoder import JSONDecodeError
+from logging import debug, error, exception, info, warning
+
+from twisted.internet.protocol import DatagramProtocol, Factory
 from twisted.internet.reactor import callLater
-from logging import debug, info, warning, error, exception
+from twisted.internet.ssl import Certificate
+from twisted.protocols.basic import LineReceiver
+
 from packet import Packet, PacketType
 
 
@@ -91,7 +94,7 @@ class Konnect(LineReceiver):
   def handlePairing(self, packet):
     self._cancelTimeout()
 
-    if packet.get("pair") == True:
+    if packet.get("pair") is True:
       if self.status == InternalStatus.REQUESTED:
         info("Pair answer")
         certificate = Certificate(self.transport.getPeerCertificate()).dumpPEM()
@@ -123,7 +126,7 @@ class Konnect(LineReceiver):
       self.factory.database.unpairDevice(self.identifier)
 
   def handleNotify(self, packet):
-    if packet.get("request") == True:
+    if packet.get("request") is True:
       info("Registered notifications listener")
 
       self.factory.database.updateDevice(self.identifier, self.name, self.device)

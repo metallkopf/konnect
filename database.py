@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-from sqlite3 import connect, OperationalError, Row
+from sqlite3 import OperationalError, Row, connect
 
 
 class Database:

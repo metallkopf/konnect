@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 
-from twisted.web.resource import Resource
 from json import dumps, loads
 from json.decoder import JSONDecodeError
-from logging import debug, info, warning, error, exception
+from logging import info
+
+from twisted.web.resource import Resource
 
 
 class API(Resource):
@@ -54,12 +55,12 @@ class API(Resource):
         pair = data["pair"]
         response = {"success": False}
 
-        if pair == True:
+        if pair is True:
           result = self.konnect.requestPair(identifier)
 
-          if result == True:
+          if result is True:
             response["success"] = True
-          elif result == False:
+          elif result is False:
             response["message"] = "already paired"
           elif result is None:
             response["message"] = "device not reachable"
@@ -67,9 +68,9 @@ class API(Resource):
           response = {"success": False}
           result = self.konnect.requestUnpair(identifier)
 
-          if result == True:
+          if result is True:
             response["success"] = True
-          elif result == False:
+          elif result is False:
             response["message"] = "device not paired"
           elif result is None:
             response["message"] = "device not reachable"
@@ -88,9 +89,9 @@ class API(Resource):
       result = self.konnect.sendPing(identifier)
       response = {"success": False}
 
-      if result == True:
+      if result is True:
         response["success"] = True
-      elif result == False:
+      elif result is False:
         response["message"] = "device not reachable"
       elif result is None:
         response["message"] = "device not paired"

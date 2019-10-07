@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
+from json import dumps, loads
 from time import time
-from json import loads, dumps
 
 
 class PacketType:
