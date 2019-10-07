@@ -18,10 +18,7 @@ class Packet:
 
   def __init__(self, _type=None):
     self.payload = {}
-    if _type is None:
-      self.payload["id"] = None
-    else:
-      self.payload["id"] = round(time() * 1000)
+    self.payload["id"] = None if _type is None else round(time() * 1000)
     self.payload["type"] = _type
     self.payload["body"] = {}
 
@@ -40,7 +37,7 @@ class Packet:
   def get(self, key, default=None):
     return self.payload["body"].get(key, default)
 
-  def istype(self, _type):
+  def isType(self, _type):
     return self.payload.get("type") == _type
 
   @staticmethod
