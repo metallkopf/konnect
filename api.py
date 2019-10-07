@@ -53,14 +53,26 @@ class API(Resource):
       if "pair" in data:
         pair = data["pair"]
         response = {"success": False}
-        result = self.konnect.requestPair(identifier)
 
-        if result == True:
-          response["success"] = True
-        elif result == False:
-          response["message"] = "already paired"
-        elif result is None:
-          response["message"] = "device not reachable"
+        if pair == True:
+          result = self.konnect.requestPair(identifier)
+
+          if result == True:
+            response["success"] = True
+          elif result == False:
+            response["message"] = "already paired"
+          elif result is None:
+            response["message"] = "device not reachable"
+        else:
+          response = {"success": False}
+          result = self.konnect.requestUnpair(identifier)
+
+          if result == True:
+            response["success"] = True
+          elif result == False:
+            response["message"] = "device not paired"
+          elif result is None:
+            response["message"] = "device not reachable"
 
         return dumps(response).encode()
       else:
