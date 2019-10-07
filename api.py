@@ -10,9 +10,10 @@ from twisted.web.resource import Resource
 class API(Resource):
   isLeaf = True
 
-  def __init__(self, konnect):
+  def __init__(self, konnect, discovery):
     super().__init__()
     self.konnect = konnect
+    self.discovery = discovery
 
   def render(self, request):
     request.setHeader(b"content-type", b"application/json")
@@ -84,7 +85,9 @@ class API(Resource):
       return b""
 
   def render_POST(self, request):
-    if self.uri.startswith("/ping/"):
+    if self.uri == "/broadcast":
+      return dumps({"success": self.discovery.broadcastIdentity()}).encode()
+    elif self.uri.startswith("/ping/"):
       identifier = self.uri[1:].split("/", 1)[-1]
       result = self.konnect.sendPing(identifier)
       response = {"success": False}
@@ -106,12 +109,13 @@ class API(Resource):
 
       identifier = self.uri[1:].split("/", 1)[-1]
 
-      if ["text", "title"] not in data:
+      if "text" not in data or "title" not in data:
         request.setResponseCode(400)
         return b""
       else:
-        self.konnect.sendNotification(identifier, data["text"], data["title"], data.get("app"))
+        self.konnect.sendNotification(identifier, data["text"], data["title"], data.get("app", ""))
         #
+        return b""
     else:
       request.setResponseCode(404)
       return b""
