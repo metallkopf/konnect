@@ -5,6 +5,7 @@ from logging import DEBUG, INFO, basicConfig
 from platform import node
 from uuid import uuid4
 
+from OpenSSL.crypto import Error
 from twisted.internet import reactor
 from twisted.web.server import Site
 
@@ -17,23 +18,28 @@ from protocols import Discovery, KonnectFactory
 if __name__ == "__main__":
   parser = ArgumentParser()
   parser.add_argument("--name", default=node())
-  parser.add_argument("--debug", action="store_true", default=True)
+  parser.add_argument("--verbose", action="store_true", default=True)
+  parser.add_argument("--service-port", default=1764, type=int, dest="service_port", choices=range(1716, 1765))
+  parser.add_argument("--admin-port", default=8080, type=int, dest="admin_port")
+  parser.add_argument("--database-path", default="", dest="database_path")
   args = parser.parse_args()
 
-  level = DEBUG if args.debug else INFO
+  level = DEBUG if args.verbose else INFO
   basicConfig(format="%(asctime)s %(levelname)s %(message)s", level=level)
 
-  database = Database()
+  database = Database(args.database_path)
 
-  identifier = Certificate.load_identifier()
-  if identifier is None:
+  try:
+    options = Certificate.load_options()
+    identifier = Certificate.extract_identifier(options)
+  except (FileNotFoundError, Error):
     identifier = str(uuid4()).replace("-", "")
+    Certificate.generate(identifier)
+    options = Certificate.load_options()
 
-  Certificate.generate(identifier)
-  options = Certificate.load_options()
   factory = KonnectFactory(database, identifier, options)
 
-  reactor.listenTCP(1764, factory)
-  reactor.listenUDP(0, Discovery(identifier, args.name))
-  reactor.listenTCP(8080, Site(API(factory)), interface="127.0.0.1")
+  reactor.listenTCP(args.service_port, factory)
+  reactor.listenUDP(0, Discovery(identifier, args.name, args.service_port))
+  reactor.listenTCP(args.admin_port, Site(API(factory)), interface="127.0.0.1")
   reactor.run()

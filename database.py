@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 
+from os.path import join
 from sqlite3 import OperationalError, Row, connect
 
 
 class Database:
-  def __init__(self):
-    self.instance = connect("konnect.db", isolation_level=None, check_same_thread=False)
+  def __init__(self, path):
+    self.instance = connect(join(path, "konnect.db"), isolation_level=None, check_same_thread=False)
     self.instance.row_factory = Row
     self._upgradeSchema()
 
@@ -16,21 +17,13 @@ class Database:
       version = 1
 
       queries = ["CREATE TABLE config (key TEXT PRIMARY KEY, value TEXT)",
-                 "CREATE TABLE trusted_devices (identifier TEXT PRIMARY KEY, certificate TEXT)"]
-      for query in queries:
-        self.instance.execute(query)
-
-      self.saveConfig("schema", version)
-
-    if version == 1:
-      version = 2
-
-      queries = ["ALTER TABLE trusted_devices ADD COLUMN name TEXT",
+                 "CREATE TABLE trusted_devices (identifier TEXT PRIMARY KEY, certificate TEXT)",
+                 "ALTER TABLE trusted_devices ADD COLUMN name TEXT",
                  "ALTER TABLE trusted_devices ADD COLUMN type TEXT"]
       for query in queries:
         self.instance.execute(query)
 
-      self.saveConfig("schema", version)
+    self.saveConfig("schema", version)
 
   def loadConfig(self, key, default=None):
     try:

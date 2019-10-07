@@ -2,33 +2,27 @@
 
 from datetime import datetime, timedelta
 from logging import debug
-from os.path import exists
 
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives.asymmetric.rsa import generate_private_key
 from cryptography.hazmat.primitives.hashes import SHA256
 from cryptography.hazmat.primitives.serialization import Encoding, \
   NoEncryption, PrivateFormat
-from cryptography.x509 import CertificateBuilder, Name, NameAttribute, \
-  load_pem_x509_certificate
+from cryptography.x509 import CertificateBuilder, Name, NameAttribute
 from cryptography.x509.oid import NameOID
 from twisted.internet.ssl import PrivateCertificate
 
 
-CERT_FILE = "certificate.pem"
-KEY_FILE = "privateKey.pem"
-
-
 class Certificate:
+  CERTIFICATE = "certificate.pem"
+  PRIVATE_KEY = "privateKey.pem"
+
   @staticmethod
   def generate(identifier):
-    if exists(CERT_FILE) and exists(KEY_FILE):
-      return
-
     debug("Generating private key")
     key = generate_private_key(65537, 2048, default_backend())
 
-    with open(KEY_FILE, "wb") as pem:
+    with open(Certificate.PRIVATE_KEY, "wb+") as pem:
       pem.write(key.private_bytes(Encoding.PEM, PrivateFormat.TraditionalOpenSSL, NoEncryption()))
 
     name = Name([
@@ -45,20 +39,17 @@ class Certificate:
       public_key(key.public_key()).serial_number(1).not_valid_before(before).\
       not_valid_after(after).sign(key, SHA256(), default_backend())
 
-    with open(CERT_FILE, "wb") as pem:
+    with open(Certificate.CERTIFICATE, "wb+") as pem:
       pem.write(cert.public_bytes(Encoding.PEM))
 
   @staticmethod
-  def load_identifier():
-    with open(CERT_FILE, "rb") as pem:
-      cert = load_pem_x509_certificate(pem.read(), default_backend())
-      return cert.subject.get_attributes_for_oid(NameOID.COMMON_NAME)[0].value
-
-    return None
+  def extract_identifier(options):
+    return options.certificate.get_subject().commonName
 
   @staticmethod
   def load_options():
-    certificate = open(CERT_FILE, "rb").read() + open(KEY_FILE, "rb").read()
+    certificate = open(Certificate.CERTIFICATE, "rb").read() + \
+      open(Certificate.PRIVATE_KEY, "rb").read()
     pem = PrivateCertificate.loadPEM(certificate)
 
     return pem.options()
