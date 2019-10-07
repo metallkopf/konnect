@@ -1,15 +1,18 @@
 #!/usr/bin/env python3
 
-from cryptography.hazmat.backends import default_backend
-from cryptography.hazmat.primitives.serialization import Encoding, PrivateFormat, NoEncryption
-from cryptography.hazmat.primitives.asymmetric.rsa import generate_private_key
-from cryptography.x509 import Name, NameAttribute, CertificateBuilder, load_pem_x509_certificate
-from cryptography.x509.oid import NameOID
-from cryptography.hazmat.primitives.hashes import SHA256
-from twisted.internet.ssl import PrivateCertificate
 from datetime import datetime, timedelta
+from logging import debug
 from os.path import exists
-from logging import debug, info, warning, error, exception
+
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives.asymmetric.rsa import generate_private_key
+from cryptography.hazmat.primitives.hashes import SHA256
+from cryptography.hazmat.primitives.serialization import Encoding, \
+  NoEncryption, PrivateFormat
+from cryptography.x509 import CertificateBuilder, Name, NameAttribute, \
+  load_pem_x509_certificate
+from cryptography.x509.oid import NameOID
+from twisted.internet.ssl import PrivateCertificate
 
 
 CERT_FILE = "certificate.pem"

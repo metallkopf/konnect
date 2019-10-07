@@ -1,16 +1,17 @@
 #!/usr/bin/env python3
 
+from argparse import ArgumentParser
+from logging import DEBUG, INFO, basicConfig
+from platform import node
+from uuid import uuid4
+
 from twisted.internet import reactor
 from twisted.web.server import Site
-from os.path import exists
-from logging import basicConfig, DEBUG, INFO
-from argparse import ArgumentParser
-from uuid import uuid4
-from platform import node
-from protocols import KonnectFactory, Discovery
+
 from api import API
-from database import Database
 from certificate import Certificate
+from database import Database
+from protocols import Discovery, KonnectFactory
 
 
 if __name__ == "__main__":
