@@ -2,3 +2,4 @@ certificate.pem
 privateKey.pem
 konnect.db
 Pipfile.lock
+test.py

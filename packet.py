@@ -41,7 +41,7 @@ class Packet:
     return self.payload.get("type") == _type
 
   @staticmethod
-  def createIdentity(identifier, name, port=1764):
+  def createIdentity(identifier, name, port):
     packet = Packet(PacketType.IDENTITY)
     packet.set("protocolVersion", Packet.PROTOCOL_VERSION)
     packet.set("deviceId", identifier)
@@ -63,7 +63,7 @@ class Packet:
   @staticmethod
   def createNotification(text, title="", app="", clearable=False):
     packet = Packet(PacketType.NOTIFICATION)
-    packet.set("id", packet.payload["id"])
+    packet.set("id", round(time() * 1000))
     packet.set("appName", app)
     packet.set("title", title)
     packet.set("text", text)

@@ -233,13 +233,14 @@ class KonnectFactory(Factory):
 
 
 class Discovery(DatagramProtocol):
-  def __init__(self, identifier, name):
+  def __init__(self, identifier, name, port):
     self.identifier = identifier
     self.name = name
+    self.port = port
 
   def startProtocol(self):
     self.transport.setBroadcastAllowed(True)
-    packet = Packet.createIdentity(self.identifier, self.name)
+    packet = Packet.createIdentity(self.identifier, self.name, self.port)
     info("Broadcasting identity packet")
     self.transport.write(bytes(packet), ("<broadcast>", 1716))
     debug("SendTo(255.255.255.255:1716) - %s", packet)
