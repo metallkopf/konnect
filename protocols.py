@@ -144,17 +144,17 @@ class Konnect(LineReceiver):
       return
 
     if not self.transport.TLS:
-      if packet.istype(PacketType.IDENTITY):
+      if packet.isType(PacketType.IDENTITY):
         self.handleIdentity(packet)
       else:
         warning("Device %s not identified, ignoring non encrypted packet %s" % (self.name, packet.payload.get("type")))
     else:
-      if packet.istype(PacketType.PAIR):
+      if packet.isType(PacketType.PAIR):
         self.handlePairing(packet)
       elif self.isTrusted():
-        if packet.istype(PacketType.REQUEST):
+        if packet.isType(PacketType.REQUEST):
           self.handleNotify(packet)
-        elif packet.istype(PacketType.PING):
+        elif packet.isType(PacketType.PING):
           self.sendPing()
         else:
           warning("Discarding unsupported packet %s for %s" % (packet.payload.get("type"), self.name))
