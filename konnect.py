@@ -37,9 +37,10 @@ if __name__ == "__main__":
     Certificate.generate(identifier)
     options = Certificate.load_options()
 
-  factory = KonnectFactory(database, identifier, options)
+  konnect = KonnectFactory(database, identifier, options)
+  discovery = Discovery(identifier, args.name, args.service_port)
 
-  reactor.listenTCP(args.service_port, factory)
-  reactor.listenUDP(0, Discovery(identifier, args.name, args.service_port))
-  reactor.listenTCP(args.admin_port, Site(API(factory)), interface="127.0.0.1")
+  reactor.listenTCP(args.service_port, konnect)
+  reactor.listenUDP(0, discovery)
+  reactor.listenTCP(args.admin_port, Site(API(konnect, discovery)), interface="127.0.0.1")
   reactor.run()

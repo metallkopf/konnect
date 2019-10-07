@@ -237,10 +237,21 @@ class Discovery(DatagramProtocol):
     self.identifier = identifier
     self.name = name
     self.port = port
+    self.packet = Packet.createIdentity(self.identifier, self.name, self.port)
 
   def startProtocol(self):
     self.transport.setBroadcastAllowed(True)
-    packet = Packet.createIdentity(self.identifier, self.name, self.port)
-    info("Broadcasting identity packet")
-    self.transport.write(bytes(packet), ("<broadcast>", 1716))
-    debug("SendTo(255.255.255.255:1716) - %s", packet)
+    self.broadcastIdentity()
+
+  def broadcastIdentity(self):
+    success = False
+
+    try:
+      self.transport.write(bytes(self.packet), ("<broadcast>", 1716))
+      info("Broadcasting identity packet")
+      debug("SendTo(255.255.255.255:1716) - %s", self.packet)
+      success = True
+    except OSError:
+      warning("Failed to broadcast identity packet")
+
+    return success
