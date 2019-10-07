@@ -67,8 +67,8 @@ class Konnect(LineReceiver):
 
   def _cancelTimeout(self):
     if self.timeout is not None and self.timeout.active():
-        self.timeout.cancel()
-        self.timeout = None
+      self.timeout.cancel()
+      self.timeout = None
 
   def isTrusted(self):
     return self.factory.database.isDeviceTrusted(self.identifier)
