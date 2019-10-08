@@ -126,13 +126,19 @@ class Konnect(LineReceiver):
       self.factory.database.unpairDevice(self.identifier)
 
   def handleNotify(self, packet):
-    if packet.get("request") is True:
-      info("Registered notifications listener")
+    if packet.get("request") is not True:
+      return
 
-      self.factory.database.updateDevice(self.identifier, self.name, self.device)
-      self.notify = True
-    else:
-      self.notify = False
+    info("Registered notifications listener")
+    self.factory.database.updateDevice(self.identifier, self.name, self.device)
+
+    for notification in self.factory.database.showNotifications(self.identifier):
+      text = notification["text"]
+      title = notification["title"]
+      application = notification["application"]
+
+      self.sendNotification(text, title, application)
+      self.factory.database.dismissNotification(notification["id"])
 
   def lineReceived(self, line):
     try:
@@ -191,7 +197,7 @@ class KonnectFactory(Factory):
     except AttributeError:
       return False
 
-  def sendNotification(self, identifier, text, title, application):
+  def sendNotification(self, identifier, text, title, application, persistent):
     if not self.isDeviceTrusted(identifier):
       return None
 
@@ -199,6 +205,9 @@ class KonnectFactory(Factory):
       self._findClient(identifier).sendNotification(text, title, application)
       return True
     except AttributeError:
+      if persistent is True:
+        self.database.persistNotification(identifier, text, title, application)
+
       return False
 
   def requestPair(self, identifier):

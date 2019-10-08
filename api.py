@@ -121,7 +121,12 @@ class API(Resource):
       code = 400
       response["message"] = "text or title not found"
     else:
-      result = self.konnect.sendNotification(identifier, data["text"], data["title"], data.get("appName", ""))
+      text = data["text"]
+      title = data["title"]
+      application = data.get("appName", "")
+      persistent = data.get("persistent", False)
+
+      result = self.konnect.sendNotification(identifier, text, title, application, persistent)
 
       if result is True:
         response["success"] = True
