@@ -2,6 +2,7 @@
 
 from datetime import datetime, timedelta
 from logging import debug
+from os.path import join
 
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives.asymmetric.rsa import generate_private_key
@@ -18,11 +19,11 @@ class Certificate:
   PRIVATE_KEY = "privateKey.pem"
 
   @staticmethod
-  def generate(identifier):
+  def generate(identifier, path):
     debug("Generating private key")
     key = generate_private_key(65537, 2048, default_backend())
 
-    with open(Certificate.PRIVATE_KEY, "wb+") as pem:
+    with open(join(path, Certificate.PRIVATE_KEY), "wb+") as pem:
       pem.write(key.private_bytes(Encoding.PEM, PrivateFormat.TraditionalOpenSSL, NoEncryption()))
 
     name = Name([
@@ -39,7 +40,7 @@ class Certificate:
       public_key(key.public_key()).serial_number(1).not_valid_before(before).\
       not_valid_after(after).sign(key, SHA256(), default_backend())
 
-    with open(Certificate.CERTIFICATE, "wb+") as pem:
+    with open(join(path, Certificate.CERTIFICATE), "wb+") as pem:
       pem.write(cert.public_bytes(Encoding.PEM))
 
   @staticmethod
@@ -47,9 +48,9 @@ class Certificate:
     return options.certificate.get_subject().commonName
 
   @staticmethod
-  def load_options():
-    certificate = open(Certificate.CERTIFICATE, "rb").read() + \
-      open(Certificate.PRIVATE_KEY, "rb").read()
+  def load_options(path):
+    certificate = open(join(path, Certificate.CERTIFICATE), "rb").read() + \
+      open(join(path, Certificate.PRIVATE_KEY), "rb").read()
     pem = PrivateCertificate.loadPEM(certificate)
 
     return pem.options()

@@ -138,7 +138,7 @@ class API(Resource):
     response = {}
     code = 200
 
-    if self.uri == "/broadcast":
+    if self.uri == "/identity":
       response = {"success": self.discovery.broadcastIdentity()}
     elif self.uri.startswith("/ping/") or self.uri.startswith("/notification/"):
       identifier = self.uri[1:].split("/", 1)[-1]
