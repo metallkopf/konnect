@@ -21,21 +21,21 @@ if __name__ == "__main__":
   parser.add_argument("--verbose", action="store_true", default=True)
   parser.add_argument("--service-port", default=1764, type=int, dest="service_port", choices=range(1716, 1765))
   parser.add_argument("--admin-port", default=8080, type=int, dest="admin_port")
-  parser.add_argument("--database-path", default="", dest="database_path")
+  parser.add_argument("--config-dir", default="", dest="config_dir")
   args = parser.parse_args()
 
   level = DEBUG if args.verbose else INFO
   basicConfig(format="%(asctime)s %(levelname)s %(message)s", level=level)
 
-  database = Database(args.database_path)
+  database = Database(args.config_dir)
 
   try:
-    options = Certificate.load_options()
+    options = Certificate.load_options(args.config_dir)
     identifier = Certificate.extract_identifier(options)
   except (FileNotFoundError, Error):
     identifier = str(uuid4()).replace("-", "")
-    Certificate.generate(identifier)
-    options = Certificate.load_options()
+    Certificate.generate(identifier, args.config_dir)
+    options = Certificate.load_options(args.config_dir)
 
   konnect = KonnectFactory(database, identifier, options)
   discovery = Discovery(identifier, args.name, args.service_port)

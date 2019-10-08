@@ -5,14 +5,18 @@ from sqlite3 import OperationalError, Row, connect
 
 
 class Database:
+  SCHEMA_VERSION = 2
+
   def __init__(self, path):
     self.instance = connect(join(path, "konnect.db"), isolation_level=None, check_same_thread=False)
     self.instance.row_factory = Row
-    self._upgradeSchema()
 
-  def _upgradeSchema(self):
     version = int(self.loadConfig("schema", 0))
 
+    if version != Database.SCHEMA_VERSION:
+      self._upgradeSchema(version)
+
+  def _upgradeSchema(self, version):
     if version == 0:
       version += 1
       queries = ["CREATE TABLE config (key TEXT PRIMARY KEY, value TEXT)",
@@ -33,7 +37,7 @@ class Database:
 
   def loadConfig(self, key, default=None):
     try:
-      query = "SELECT value FROM config WHERE key = ? LIMIT 1"
+      query = "SELECT value FROM config WHERE key = ?"
       return self.instance.execute(query, (key,)).fetchone()[0]
     except (OperationalError, TypeError):
       return default
@@ -62,3 +66,15 @@ class Database:
   def unpairDevice(self, identifier):
     query = "DELETE FROM trusted_devices WHERE identifier = ?"
     self.instance.execute(query, (identifier,))
+
+  def createNotification(self, identifier, text, title, application):
+    query = "INSERT INTO notifications (identifier, [text], title, application) VALUES (?, ?, ?, ?)"
+    self.instance.execute(query, (identifier, text, title, application))
+
+  def dismissNotification(self, _id):
+    query = "DELETE FROM notifications WHERE id = ?"
+    self.instance.execute(query, (_id,))
+
+  def showNotifications(self, identifier):
+    query = "SELECT * FROM notifications WHERE identifier = ?"
+    return self.instance.execute(query, (identifier,)).fetchall()
