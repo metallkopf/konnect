@@ -67,7 +67,7 @@ class Database:
     query = "DELETE FROM trusted_devices WHERE identifier = ?"
     self.instance.execute(query, (identifier,))
 
-  def createNotification(self, identifier, text, title, application):
+  def persistNotification(self, identifier, text, title, application):
     query = "INSERT INTO notifications (identifier, [text], title, application) VALUES (?, ?, ?, ?)"
     self.instance.execute(query, (identifier, text, title, application))
 
