@@ -14,12 +14,18 @@ class Database:
     version = int(self.loadConfig("schema", 0))
 
     if version == 0:
-      version = 1
-
+      version += 1
       queries = ["CREATE TABLE config (key TEXT PRIMARY KEY, value TEXT)",
                  "CREATE TABLE trusted_devices (identifier TEXT PRIMARY KEY, certificate TEXT)",
                  "ALTER TABLE trusted_devices ADD COLUMN name TEXT",
                  "ALTER TABLE trusted_devices ADD COLUMN type TEXT"]
+      for query in queries:
+        self.instance.execute(query)
+
+    if version == 1:
+      version += 1
+      queries = ["CREATE TABLE notifications (id INTEGER PRIMARY KEY, identifier TEXT, [text] TEXT, title TEXT, application TEXT)",
+                 "CREATE INDEX notification_identifier ON notifications (identifier)"]
       for query in queries:
         self.instance.execute(query)
 

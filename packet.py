@@ -62,14 +62,14 @@ class Packet:
     return packet
 
   @staticmethod
-  def createNotification(text, title="", app="", clearable=False):
+  def createNotification(text, title="", application=""):
     packet = Packet(PacketType.NOTIFICATION)
     packet.set("id", str(uuid4()))
-    packet.set("appName", app)
+    packet.set("appName", application)
     packet.set("title", title)
     packet.set("text", text)
-    packet.set("isClearable", clearable)
-    packet.set("ticker", "%s : %s" % (title, text))
+    packet.set("isClearable", False)
+    packet.set("ticker", "%s: %s" % (title, text))
 
     return packet
 

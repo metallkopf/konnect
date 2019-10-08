@@ -42,8 +42,8 @@ class Konnect(LineReceiver):
     ping = Packet.createPing()
     self._sendPacket(ping)
 
-  def sendNotification(self, text, title, app):
-    notification = Packet.createNotification(text, title, app)
+  def sendNotification(self, text, title, application):
+    notification = Packet.createNotification(text, title, application)
     self._sendPacket(notification)
 
   def requestPair(self):
@@ -191,12 +191,12 @@ class KonnectFactory(Factory):
     except AttributeError:
       return False
 
-  def sendNotification(self, identifier, text, title, app):
+  def sendNotification(self, identifier, text, title, application):
     if not self.isDeviceTrusted(identifier):
       return None
 
     try:
-      self._findClient(identifier).sendNotification(text, title, app)
+      self._findClient(identifier).sendNotification(text, title, application)
       return True
     except AttributeError:
       return False

@@ -25,97 +25,135 @@ class API(Resource):
     return super().render(request)
 
   def render_GET(self, request):
+    response = {}
+    code = 200
+
     if self.uri == "/":
-      return b""
+      pass
     elif self.uri == "/device":
-      return dumps(self.konnect.getDevices()).encode()
+      response = self.konnect.getDevices()
     elif self.uri.startswith("/device/"):
       identifier = self.uri[1:].split("/", 1)[-1]
       device = self.konnect.getDevices().get(identifier)
 
       if device is None:
-        request.setResponseCode(404)
-        return b""
+        code = 404
       else:
-        return dumps(device).encode()
+        response = device
     else:
-      request.setResponseCode(404)
-      return b""
+      code = 404
 
-  def render_PUT(self, request):
-    if self.uri.startswith("/device/"):
-      try:
-        data = loads(request.content.read())
-      except JSONDecodeError:
-        request.setResponseCode(400)
-        return dumps({"success": False, "message": "unserialization error"}).encode()
+    request.setResponseCode(code)
+    return dumps(response).encode()
 
-      identifier = self.uri[1:].split("/", 1)[-1]
+  def _handlePairing(self, identifier, pair):
+    response = {"success": False}
+    code = 200
 
-      if "pair" in data:
-        pair = data["pair"]
-        response = {"success": False}
-
-        if pair is True:
-          result = self.konnect.requestPair(identifier)
-
-          if result is True:
-            response["success"] = True
-          elif result is False:
-            response["message"] = "already paired"
-          elif result is None:
-            response["message"] = "device not reachable"
-        else:
-          response = {"success": False}
-          result = self.konnect.requestUnpair(identifier)
-
-          if result is True:
-            response["success"] = True
-          elif result is False:
-            response["message"] = "device not paired"
-          elif result is None:
-            response["message"] = "device not reachable"
-
-        return dumps(response).encode()
-      else:
-        request.setResponseCode(400)
-        return b""
-    else:
-      request.setResponseCode(404)
-      return b""
-
-  def render_POST(self, request):
-    if self.uri == "/broadcast":
-      return dumps({"success": self.discovery.broadcastIdentity()}).encode()
-    elif self.uri.startswith("/ping/"):
-      identifier = self.uri[1:].split("/", 1)[-1]
-      result = self.konnect.sendPing(identifier)
-      response = {"success": False}
+    if pair is True:
+      result = self.konnect.requestPair(identifier)
 
       if result is True:
         response["success"] = True
       elif result is False:
+        response["message"] = "already paired"
+      elif result is None:
+        code = 404
+        response["message"] = "device not reachable"
+    else:
+      result = self.konnect.requestUnpair(identifier)
+
+      if result is True:
+        response["success"] = True
+      elif result is False:
+        code = 401
+        response["message"] = "device not paired"
+      elif result is None:
+        code = 404
+        response["message"] = "device not reachable"
+
+    return response, code
+
+  def render_PUT(self, request):
+    response = {}
+    code = 200
+
+    if self.uri.startswith("/device/"):
+      try:
+        identifier = self.uri[1:].split("/", 1)[-1]
+        data = loads(request.content.read())
+        pair = bool(data["pair"])
+
+        response, code = self._handlePairing(identifier, pair)
+      except IndexError:
+        code = 400
+        response["message"] = "pair not found"
+      except JSONDecodeError:
+        code = 400
+        response["message"] = "unserialization error"
+    else:
+      code = 404
+
+    request.setResponseCode(code)
+    return dumps(response).encode()
+
+  def _handlePing(self, identifier):
+    response = {"success": False}
+    code = 200
+    result = self.konnect.sendPing(identifier)
+
+    if result is True:
+      response["success"] = True
+    elif result is False:
+      code = 404
+      response["message"] = "device not reachable"
+    elif result is None:
+      code = 401
+      response["message"] = "device not paired"
+
+    return response, code
+
+  def _handleNotification(self, identifier, data):
+    response = {"success": False}
+    code = 200
+
+    if "text" not in data or "title" not in data:
+      code = 400
+      response["message"] = "text or title not found"
+    else:
+      result = self.konnect.sendNotification(identifier, data["text"], data["title"], data.get("appName", ""))
+
+      if result is True:
+        response["success"] = True
+      elif result is False:
+        code = 404
         response["message"] = "device not reachable"
       elif result is None:
+        code = 401
         response["message"] = "device not paired"
 
-      return dumps(response).encode()
-    elif self.uri.startswith("/notification/"):
-      try:
-        data = loads(request.content.read())
-      except JSONDecodeError:
-        request.setResponseCode(400)
-        return dumps({"success": False, "message": "unserialization error"}).encode()
+    return response, code
 
+  def render_POST(self, request):
+    response = {}
+    code = 200
+
+    if self.uri == "/broadcast":
+      response = {"success": self.discovery.broadcastIdentity()}
+    elif self.uri.startswith("/ping/") or self.uri.startswith("/notification/"):
       identifier = self.uri[1:].split("/", 1)[-1]
 
-      if "text" not in data or "title" not in data:
-        request.setResponseCode(400)
-        return b""
+      if self.uri.startswith("/ping/"):
+        response, code = self._handlePing(identifier)
       else:
-        self.konnect.sendNotification(identifier, data["text"], data["title"], data.get("app", ""))
-        #
-        return b""
+        try:
+          data = loads(request.content.read())
+          response, code = self._handleNotification(identifier, data)
+        except JSONDecodeError:
+          code = 400
+          response["message"] = "unserialization error"
     else:
-      request.setResponseCode(404)
-      return b""
+      code = 404
+
+    request.setResponseCode(code)
+    return dumps(response).encode()
