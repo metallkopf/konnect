@@ -10,7 +10,6 @@ from twisted.protocols.basic import LineReceiver
 
 from packet import Packet, PacketType
 
-
 class InternalStatus:
   NOT_PAIRED = 1
   REQUESTED = 2
@@ -20,18 +19,19 @@ class InternalStatus:
 class Konnect(LineReceiver):
   delimiter = b"\n"
   status = InternalStatus.NOT_PAIRED
-  notify = False
   identifier = None
   name = "unnamed"
   device = "unknown"
   timeout = None
 
   def connectionMade(self):
+    self.transport.setTcpKeepAlive(1)
     self.factory.clients.add(self)
     peer = self.transport.getPeer()
     self.address = "{}:{}".format(peer.host, peer.port)
 
   def connectionLost(self, reason):
+    info("Device %s disconnected" % self.name)
     self.factory.clients.remove(self)
 
   def _sendPacket(self, data):
@@ -133,12 +133,12 @@ class Konnect(LineReceiver):
     self.factory.database.updateDevice(self.identifier, self.name, self.device)
 
     for notification in self.factory.database.showNotifications(self.identifier):
-      text = notification["text"]
-      title = notification["title"]
-      application = notification["application"]
+      text = notification[1]
+      title = notification[2]
+      application = notification[3]
 
       self.sendNotification(text, title, application)
-      self.factory.database.dismissNotification(notification["id"])
+      self.factory.database.dismissNotification(notification[0])
 
   def lineReceived(self, line):
     try:
@@ -232,7 +232,7 @@ class KonnectFactory(Factory):
     devices = {}
 
     for trusted in self.database.getTrustedDevices():
-      devices[trusted["identifier"]] = {"name": trusted["name"], "type": trusted["type"], "reachable": False, "trusted": True}
+      devices[trusted[0]] = {"name": trusted[1], "type": trusted[2], "reachable": False, "trusted": True}
 
     for client in self.clients:
       trusted = client.identifier in devices
