@@ -9,7 +9,6 @@ class Database:
 
   def __init__(self, path):
     self.instance = connect(join(path, "konnect.db"), isolation_level=None, check_same_thread=False)
-    self.instance.row_factory = Row
 
     version = int(self.loadConfig("schema", 0))
 
@@ -48,7 +47,7 @@ class Database:
 
   def isDeviceTrusted(self, identifier):
     query = "SELECT COUNT(1) FROM trusted_devices WHERE identifier = ?"
-    return bool(self.instance.execute(query, (identifier,)).fetchone()[0])
+    return int(self.instance.execute(query, (identifier,)).fetchone()[0]) == 1
 
   def getTrustedDevices(self):
     query = "SELECT identifier, name, type FROM trusted_devices"
@@ -76,5 +75,5 @@ class Database:
     self.instance.execute(query, (_id,))
 
   def showNotifications(self, identifier):
-    query = "SELECT * FROM notifications WHERE identifier = ?"
+    query = "SELECT id, text, title, application FROM notifications WHERE identifier = ?"
     return self.instance.execute(query, (identifier,)).fetchall()

@@ -140,11 +140,17 @@ class API(Resource):
     return response, code
 
   def render_POST(self, request):
-    response = {}
+    response = {"success": False}
     code = 200
 
     if self.uri == "/identity":
       response = {"success": self.discovery.broadcastIdentity()}
+    elif self.uri == "/ping":
+      response["success"] = None
+
+      for identifier, device in self.konnect.getDevices().items():
+        if device["reachable"] is True:
+          response[identifier], _ = self._handlePing(identifier)
     elif self.uri.startswith("/ping/") or self.uri.startswith("/notification/"):
       identifier = self.uri[1:].split("/", 1)[-1]
 
