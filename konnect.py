@@ -19,6 +19,7 @@ if __name__ == "__main__":
   parser = ArgumentParser()
   parser.add_argument("--name", default=node())
   parser.add_argument("--verbose", action="store_true", default=True)
+  parser.add_argument("--discovery-port", default=1716, type=int, dest="discovery_port")
   parser.add_argument("--service-port", default=1764, type=int, dest="service_port", choices=range(1716, 1765))
   parser.add_argument("--admin-port", default=8080, type=int, dest="admin_port")
   parser.add_argument("--config-dir", default="", dest="config_dir")
@@ -38,7 +39,7 @@ if __name__ == "__main__":
     options = Certificate.load_options(args.config_dir)
 
   konnect = KonnectFactory(database, identifier, options)
-  discovery = Discovery(identifier, args.name, args.service_port)
+  discovery = Discovery(identifier, args.name, args.discovery_port, args.service_port)
 
   reactor.listenTCP(args.service_port, konnect)
   reactor.listenUDP(0, discovery)

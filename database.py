@@ -1,36 +1,34 @@
 #!/usr/bin/env python3
 
 from os.path import join
-from sqlite3 import OperationalError, Row, connect
+from sqlite3 import OperationalError, connect
 
 
 class Database:
-  SCHEMA_VERSION = 2
+  SCHEMA = [
+    ["CREATE TABLE config (key TEXT PRIMARY KEY, value TEXT)",
+     "CREATE TABLE trusted_devices (identifier TEXT PRIMARY KEY, certificate TEXT)",
+     "ALTER TABLE trusted_devices ADD COLUMN name TEXT",
+     "ALTER TABLE trusted_devices ADD COLUMN type TEXT"],
+    ["CREATE TABLE notifications (id INTEGER PRIMARY KEY, identifier TEXT, [text] TEXT, title TEXT, application TEXT)",
+     "CREATE INDEX notification_identifier ON notifications (identifier)"],
+    ["ALTER TABLE notifications ADD COLUMN icon TEXT",
+     "ALTER TABLE notifications ADD COLUMN clearable BOOLEAN"],
+  ]
 
   def __init__(self, path):
     self.instance = connect(join(path, "konnect.db"), isolation_level=None, check_same_thread=False)
+    self._upgradeSchema()
 
-    version = int(self.loadConfig("schema", 0))
+  def _upgradeSchema(self):
+    version = int(self.loadConfig("schema", -1))
 
-    if version != Database.SCHEMA_VERSION:
-      self._upgradeSchema(version)
+    for index, queries in enumerate(self.SCHEMA):
+      if index > version:
+        version = index
 
-  def _upgradeSchema(self, version):
-    if version == 0:
-      version += 1
-      queries = ["CREATE TABLE config (key TEXT PRIMARY KEY, value TEXT)",
-                 "CREATE TABLE trusted_devices (identifier TEXT PRIMARY KEY, certificate TEXT)",
-                 "ALTER TABLE trusted_devices ADD COLUMN name TEXT",
-                 "ALTER TABLE trusted_devices ADD COLUMN type TEXT"]
-      for query in queries:
-        self.instance.execute(query)
-
-    if version == 1:
-      version += 1
-      queries = ["CREATE TABLE notifications (id INTEGER PRIMARY KEY, identifier TEXT, [text] TEXT, title TEXT, application TEXT)",
-                 "CREATE INDEX notification_identifier ON notifications (identifier)"]
-      for query in queries:
-        self.instance.execute(query)
+        for query in queries:
+          self.instance.execute(query)
 
     self.saveConfig("schema", version)
 
