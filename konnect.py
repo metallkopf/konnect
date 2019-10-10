@@ -41,7 +41,7 @@ if __name__ == "__main__":
   konnect = KonnectFactory(database, identifier, options)
   discovery = Discovery(identifier, args.name, args.discovery_port, args.service_port)
 
-  reactor.listenTCP(args.service_port, konnect)
-  reactor.listenUDP(0, discovery)
+  reactor.listenTCP(args.service_port, konnect, interface="0.0.0.0")
+  reactor.listenUDP(0, discovery, interface="0.0.0.0")
   reactor.listenTCP(args.admin_port, Site(API(konnect, discovery)), interface="127.0.0.1")
   reactor.run()

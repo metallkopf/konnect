@@ -14,6 +14,7 @@ class Database:
      "CREATE INDEX notification_identifier ON notifications (identifier)"],
     ["ALTER TABLE notifications ADD COLUMN icon TEXT",
      "ALTER TABLE notifications ADD COLUMN clearable BOOLEAN"],
+    ["ALTER TABLE notifications ADD COLUMN reference TEXT"]
   ]
 
   def __init__(self, path):
