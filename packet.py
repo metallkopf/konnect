@@ -18,28 +18,31 @@ class Packet:
   DEVICE_TYPE = "desktop"
 
   def __init__(self, _type=None):
-    self.payload = {}
-    self.payload["id"] = None if _type is None else round(time() * 1000)
-    self.payload["type"] = _type
-    self.payload["body"] = {}
+    self.data = {}
+    self.data["id"] = None if _type is None else round(time() * 1000)
+    self.data["type"] = _type
+    self.data["body"] = {}
 
   def __bytes__(self):
-    return dumps(self.payload).encode()
+    return dumps(self.data).encode()
 
   def __repr__(self):
-    return "Packet({{id={d[id]}, type={d[type]}, body={d[body]}}})".format(d=self.payload)
+    return "Packet({{id={d[id]}, type={d[type]}, body={d[body]}}})".format(d=self.data)
 
   def set(self, key, value):
-    self.payload["body"][key] = value
+    self.data["body"][key] = value
 
   def has(self, key):
-    return key in self.payload["body"]
+    return key in self.data["body"]
 
   def get(self, key, default=None):
-    return self.payload["body"].get(key, default)
+    return self.data["body"].get(key, default)
 
   def isType(self, _type):
-    return self.payload.get("type") == _type
+    return self.data.get("type") == _type
+
+  def getType(self):
+    return self.data.get("type")
 
   @staticmethod
   def createIdentity(identifier, name, port):
@@ -62,9 +65,9 @@ class Packet:
     return packet
 
   @staticmethod
-  def createNotification(text, title="", application="", clearable=False):
+  def createNotification(text, title="", application="", reference=None, clearable=False):
     packet = Packet(PacketType.NOTIFICATION)
-    packet.set("id", str(uuid4()))
+    packet.set("id", reference or str(uuid4()))
     packet.set("appName", application)
     packet.set("title", title)
     packet.set("text", text)
@@ -78,8 +81,8 @@ class Packet:
     return Packet(PacketType.PING)
 
   @staticmethod
-  def load(payload):
+  def load(data):
     packet = Packet()
-    packet.payload.update(loads(payload))
+    packet.data.update(loads(data))
 
     return packet

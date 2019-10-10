@@ -156,7 +156,7 @@ class Konnect(LineReceiver):
       if packet.isType(PacketType.IDENTITY):
         self.handleIdentity(packet)
       else:
-        warning("Device %s not identified, ignoring non encrypted packet %s" % (self.name, packet.payload.get("type")))
+        warning("Device %s not identified, ignoring non encrypted packet %s" % (self.name, packet.getType()))
     else:
       if packet.isType(PacketType.PAIR):
         self.handlePairing(packet)
@@ -166,9 +166,9 @@ class Konnect(LineReceiver):
         elif packet.isType(PacketType.PING):
           self.sendPing()
         else:
-          warning("Discarding unsupported packet %s for %s" % (packet.payload.get("type"), self.name))
+          warning("Discarding unsupported packet %s for %s" % (packet.getType(), self.name))
       else:
-        warning("Device %s not paired, ignoring packet %s" % (self.name, packet.payload.get("type")))
+        warning("Device %s not paired, ignoring packet %s" % (self.name, packet.getType()))
         self.status = InternalStatus.NOT_PAIRED
         pair = Packet.createPair(False)
         self._sendPacket(pair)
@@ -255,7 +255,7 @@ class Discovery(DatagramProtocol):
     self.identifier = identifier
     self.name = name
     self.port = discovery_port
-    self.packet = Packet.createIdentity(self.identifier, self.name, self.service_port)
+    self.packet = Packet.createIdentity(self.identifier, self.name, service_port)
 
   def startProtocol(self):
     self.transport.setBroadcastAllowed(True)
