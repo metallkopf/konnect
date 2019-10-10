@@ -53,9 +53,9 @@ class API(Resource):
     if pair is True:
       result = self.konnect.requestPair(identifier)
 
-      if result is True:
+      if result is False:
         response["success"] = True
-      elif result is False:
+      elif result is True:
         response["message"] = "already paired"
       elif result is None:
         code = 404
@@ -151,6 +151,18 @@ class API(Resource):
       for identifier, device in self.konnect.getDevices().items():
         if device["reachable"] is True:
           response[identifier], _ = self._handlePing(identifier)
+    elif self.uri == "/notification":
+      response["success"] = None
+
+      try:
+        data = loads(request.content.read())
+
+        for identifier, device in self.konnect.getDevices().items():
+          if device["reachable"] is True:
+            response[identifier], _ = self._handleNotification(identifier, data)
+      except JSONDecodeError:
+        code = 400
+        response["message"] = "unserialization error"
     elif self.uri.startswith("/ping/") or self.uri.startswith("/notification/"):
       identifier = self.uri[1:].split("/", 1)[-1]
 

@@ -10,6 +10,7 @@ from twisted.protocols.basic import LineReceiver
 
 from packet import Packet, PacketType
 
+
 class InternalStatus:
   NOT_PAIRED = 1
   REQUESTED = 2
@@ -23,6 +24,7 @@ class Konnect(LineReceiver):
   name = "unnamed"
   device = "unknown"
   timeout = None
+  notify = False
 
   def connectionMade(self):
     self.transport.setTcpKeepAlive(1)
@@ -60,10 +62,12 @@ class Konnect(LineReceiver):
     self._sendPacket(pair)
 
   def requestUnpair(self):
-    self.status = InternalStatus.REQUESTED
     self._cancelTimeout()
     pair = Packet.createPair(False)
     self._sendPacket(pair)
+    self.status = InternalStatus.NOT_PAIRED
+    self.notify = False
+    self.factory.database.unpairDevice(self.identifier)
 
   def _cancelTimeout(self):
     if self.timeout is not None and self.timeout.active():
@@ -118,11 +122,9 @@ class Konnect(LineReceiver):
 
       if self.status == InternalStatus.REQUESTED:
         info("Canceled by other peer")
-      else:
-        pair = Packet.createPair(False)
-        self._sendPacket(pair)
 
       self.status = InternalStatus.NOT_PAIRED
+      self.notify = False
       self.factory.database.unpairDevice(self.identifier)
 
   def handleNotify(self, packet):
@@ -131,6 +133,7 @@ class Konnect(LineReceiver):
 
     info("Registered notifications listener")
     self.factory.database.updateDevice(self.identifier, self.name, self.device)
+    self.notify = True
 
     for notification in self.factory.database.showNotifications(self.identifier):
       text = notification[1]
@@ -202,7 +205,13 @@ class KonnectFactory(Factory):
       return None
 
     try:
-      self._findClient(identifier).sendNotification(text, title, application)
+      client = self._findClient(identifier)
+
+      if client.notify is True:
+        client.sendNotification(text, title, application)
+      else:
+        self.database.persistNotification(identifier, text, title, application)
+
       return True
     except AttributeError:
       if persistent is True:
@@ -242,11 +251,11 @@ class KonnectFactory(Factory):
 
 
 class Discovery(DatagramProtocol):
-  def __init__(self, identifier, name, port):
+  def __init__(self, identifier, name, discovery_port, service_port):
     self.identifier = identifier
     self.name = name
-    self.port = port
-    self.packet = Packet.createIdentity(self.identifier, self.name, self.port)
+    self.port = discovery_port
+    self.packet = Packet.createIdentity(self.identifier, self.name, self.service_port)
 
   def startProtocol(self):
     self.transport.setBroadcastAllowed(True)
@@ -256,9 +265,9 @@ class Discovery(DatagramProtocol):
     success = False
 
     try:
-      self.transport.write(bytes(self.packet), ("<broadcast>", 1716))
+      self.transport.write(bytes(self.packet), ("<broadcast>", self.port))
       info("Broadcasting identity packet")
-      debug("SendTo(255.255.255.255:1716) - %s", self.packet)
+      debug("SendTo(<broadcast>:1716) - %s", self.packet)
       success = True
     except OSError:
       warning("Failed to broadcast identity packet")
