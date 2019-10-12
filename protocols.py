@@ -261,15 +261,27 @@ class Discovery(DatagramProtocol):
     self.transport.setBroadcastAllowed(True)
     self.broadcastIdentity()
 
-  def broadcastIdentity(self):
-    success = False
-
+  def broadcastIdentity(self, address="<broadcast>"):
     try:
-      self.transport.write(bytes(self.packet), ("<broadcast>", self.port))
       info("Broadcasting identity packet")
-      debug("SendTo(<broadcast>:1716) - %s", self.packet)
-      success = True
+      debug("SendTo(%s:%d) - %s", address, self.port, self.packet)
+      self.transport.write(bytes(self.packet), (address, self.port))
     except OSError:
       warning("Failed to broadcast identity packet")
 
-    return success
+  def datagramReceived(self, datagram, addr):
+    try:
+      packet = Packet.load(datagram)
+      debug("RecvFrom(%s) - %s", addr, packet)
+    except JSONDecodeError as e:
+      error("Unserialization error: %s" % datagram)
+      exception(e)
+      return
+
+    if not packet.isType(PacketType.IDENTITY):
+      info("Received a UDP packet of wrong type %s", packet.getType())
+    elif packet.get("deviceId") == self.identifier:
+      debug("Ignoring my own broadcast")
+    else:
+      debug("Received UDP identity packet from %s, trying reverse connection", self.addr[0]);
+      self.broadcastIdentity(addr[0])
