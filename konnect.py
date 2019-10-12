@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 
 from argparse import ArgumentParser
-from logging import DEBUG, INFO, basicConfig
+from logging import DEBUG, INFO, basicConfig, root
 from platform import node
 from uuid import uuid4
 
 from OpenSSL.crypto import Error
+from systemd.journal import JournalHandler
 from twisted.internet import reactor
 from twisted.web.server import Site
 
@@ -28,6 +29,7 @@ if __name__ == "__main__":
 
   level = DEBUG if args.verbose else INFO
   basicConfig(format="%(asctime)s %(levelname)s %(message)s", level=level)
+  root.addHandler(JournalHandler(SYSLOG_IDENTIFIER='konnect'))
 
   database = Database(args.config_dir)
 
