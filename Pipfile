@@ -12,6 +12,7 @@ cryptography = "*"
 twisted = "*"
 pyopenssl = "*"
 service-identity = "*"
+systemd-python = "*"
 
 [requires]
 python_version = "3.7"
