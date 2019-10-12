@@ -1,0 +1,13 @@
+[Unit]
+Description=Konnect
+After=network.target
+
+[Service]
+User=user
+Restart=always
+Type=simple
+WorkingDirectory=/home/user
+ExecStart=/usr/bin/pipenv run python konnect.py --receiver
+
+[Install]
+WantedBy=multi-user.target
