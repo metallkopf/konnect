@@ -25,11 +25,14 @@ if __name__ == "__main__":
   parser.add_argument("--admin-port", default=8080, type=int, dest="admin_port")
   parser.add_argument("--config-dir", default="", dest="config_dir")
   parser.add_argument("--receiver", action="store_true", default=False)
+  parser.add_argument("--service", action="store_true", default=False)
   args = parser.parse_args()
 
   level = DEBUG if args.verbose else INFO
   basicConfig(format="%(asctime)s %(levelname)s %(message)s", level=level)
-  root.addHandler(JournalHandler(SYSLOG_IDENTIFIER='konnect'))
+
+  if args.service is True:
+    root.addHandler(JournalHandler(SYSLOG_IDENTIFIER='konnect'))
 
   database = Database(args.config_dir)
 
