@@ -83,9 +83,9 @@ class Konnect(LineReceiver):
     self.device = packet.get("deviceType", "unknown")
 
     if packet.get("protocolVersion") == Packet.PROTOCOL_VERSION:
-      info("Starting client ssl (but I'm the server TCP socket)")
+      info("Starting client SSL (but I'm the server TCP socket)")
       self.transport.startTLS(self.factory.options, False)
-      info("Socket succesfully stablished an SSL connection")
+      info("Socket succesfully established an SSL connection")
 
       if self.isTrusted():
         info("It is a known device %s", self.name)
@@ -283,5 +283,5 @@ class Discovery(DatagramProtocol):
     elif packet.get("deviceId") == self.identifier:
       debug("Ignoring my own broadcast")
     else:
-      debug("Received UDP identity packet from %s, trying reverse connection", addr[0]);
+      debug("Received UDP identity packet from %s, trying reverse connection", addr[0])
       self.broadcastIdentity(addr[0])
