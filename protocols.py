@@ -33,7 +33,7 @@ class Konnect(LineReceiver):
     self.address = "{}:{}".format(peer.host, peer.port)
 
   def connectionLost(self, reason):
-    info("Device %s disconnected" % self.name)
+    info("Device %s disconnected", self.name)
     self.factory.clients.remove(self)
 
   def _sendPacket(self, data):
@@ -88,11 +88,11 @@ class Konnect(LineReceiver):
       info("Socket succesfully stablished an SSL connection")
 
       if self.isTrusted():
-        info("It is a known device %s" % self.name)
+        info("It is a known device %s", self.name)
       else:
-        info("It is a new device %s" % self.name)
+        info("It is a new device %s", self.name)
     else:
-      info("%s uses an old protocol version, this won't work" % self.name)
+      info("%s uses an old protocol version, this won't work", self.name)
       self.transport.abortConnection()
 
   def handlePairing(self, packet):
@@ -148,7 +148,7 @@ class Konnect(LineReceiver):
       packet = Packet.load(line)
       debug("RecvFrom(%s) - %s", self.address, packet)
     except JSONDecodeError as e:
-      error("Unserialization error: %s" % line)
+      error("Unserialization error: %s", line)
       exception(e)
       return
 
@@ -156,7 +156,7 @@ class Konnect(LineReceiver):
       if packet.isType(PacketType.IDENTITY):
         self.handleIdentity(packet)
       else:
-        warning("Device %s not identified, ignoring non encrypted packet %s" % (self.name, packet.getType()))
+        warning("Device %s not identified, ignoring non encrypted packet %s", self.name, packet.getType())
     else:
       if packet.isType(PacketType.PAIR):
         self.handlePairing(packet)
@@ -166,9 +166,9 @@ class Konnect(LineReceiver):
         elif packet.isType(PacketType.PING):
           self.sendPing()
         else:
-          warning("Discarding unsupported packet %s for %s" % (packet.getType(), self.name))
+          warning("Discarding unsupported packet %s for %s", packet.getType(), self.name)
       else:
-        warning("Device %s not paired, ignoring packet %s" % (self.name, packet.getType()))
+        warning("Device %s not paired, ignoring packet %s", self.name, packet.getType())
         self.status = InternalStatus.NOT_PAIRED
         pair = Packet.createPair(False)
         self._sendPacket(pair)
@@ -274,7 +274,7 @@ class Discovery(DatagramProtocol):
       packet = Packet.load(datagram)
       debug("RecvFrom(%s) - %s", addr, packet)
     except JSONDecodeError as e:
-      error("Unserialization error: %s" % datagram)
+      error("Unserialization error: %s", datagram)
       exception(e)
       return
 
@@ -283,5 +283,5 @@ class Discovery(DatagramProtocol):
     elif packet.get("deviceId") == self.identifier:
       debug("Ignoring my own broadcast")
     else:
-      debug("Received UDP identity packet from %s, trying reverse connection", self.addr[0]);
+      debug("Received UDP identity packet from %s, trying reverse connection", addr[0]);
       self.broadcastIdentity(addr[0])
