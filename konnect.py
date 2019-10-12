@@ -23,6 +23,7 @@ if __name__ == "__main__":
   parser.add_argument("--service-port", default=1764, type=int, dest="service_port", choices=range(1716, 1765))
   parser.add_argument("--admin-port", default=8080, type=int, dest="admin_port")
   parser.add_argument("--config-dir", default="", dest="config_dir")
+  parser.add_argument("--receiver", action="store_true", default=False)
   args = parser.parse_args()
 
   level = DEBUG if args.verbose else INFO
@@ -42,6 +43,6 @@ if __name__ == "__main__":
   discovery = Discovery(identifier, args.name, args.discovery_port, args.service_port)
 
   reactor.listenTCP(args.service_port, konnect, interface="0.0.0.0")
-  reactor.listenUDP(0, discovery, interface="0.0.0.0")
+  reactor.listenUDP(args.discovery_port if args.receiver else 0, discovery, interface="0.0.0.0")
   reactor.listenTCP(args.admin_port, Site(API(konnect, discovery)), interface="127.0.0.1")
   reactor.run()
