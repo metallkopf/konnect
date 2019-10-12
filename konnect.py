@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 from argparse import ArgumentParser
-from logging import DEBUG, INFO, basicConfig, root
+from logging import DEBUG, INFO, StreamHandler, basicConfig
 from platform import node
 from uuid import uuid4
 
@@ -28,11 +28,15 @@ if __name__ == "__main__":
   parser.add_argument("--service", action="store_true", default=False)
   args = parser.parse_args()
 
-  level = DEBUG if args.verbose else INFO
-  basicConfig(format="%(asctime)s %(levelname)s %(message)s", level=level)
+  handlers = []
 
   if args.service is True:
-    root.addHandler(JournalHandler(SYSLOG_IDENTIFIER='konnect'))
+    handlers.append(JournalHandler(SYSLOG_IDENTIFIER='konnect'))
+  else:
+    handlers.append(StreamHandler())
+
+  level = DEBUG if args.verbose else INFO
+  basicConfig(format="%(asctime)s %(levelname)s %(message)s", level=level, handlers=handlers)
 
   database = Database(args.config_dir)
 
