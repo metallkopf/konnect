@@ -12,9 +12,7 @@ class Database:
      "ALTER TABLE trusted_devices ADD COLUMN type TEXT"],
     ["CREATE TABLE notifications (id INTEGER PRIMARY KEY, identifier TEXT, [text] TEXT, title TEXT, application TEXT)",
      "CREATE INDEX notification_identifier ON notifications (identifier)"],
-    ["ALTER TABLE notifications ADD COLUMN icon TEXT",
-     "ALTER TABLE notifications ADD COLUMN clearable BOOLEAN"],
-    ["ALTER TABLE notifications ADD COLUMN reference TEXT"]
+    ["ALTER TABLE notifications ADD COLUMN reference TEXT"],
   ]
 
   def __init__(self, path):
@@ -65,14 +63,14 @@ class Database:
     query = "DELETE FROM trusted_devices WHERE identifier = ?"
     self.instance.execute(query, (identifier,))
 
-  def persistNotification(self, identifier, text, title, application):
-    query = "INSERT INTO notifications (identifier, [text], title, application) VALUES (?, ?, ?, ?)"
-    self.instance.execute(query, (identifier, text, title, application))
+  def persistNotification(self, identifier, text, title, application, reference):
+    query = "INSERT INTO notifications (identifier, [text], title, application, reference) VALUES (?, ?, ?, ?, ?)"
+    self.instance.execute(query, (identifier, text, title, application, reference))
 
   def dismissNotification(self, _id):
     query = "DELETE FROM notifications WHERE id = ?"
     self.instance.execute(query, (_id,))
 
   def showNotifications(self, identifier):
-    query = "SELECT id, text, title, application FROM notifications WHERE identifier = ?"
+    query = "SELECT id, [text], title, application, reference FROM notifications WHERE identifier = ?"
     return self.instance.execute(query, (identifier,)).fetchall()

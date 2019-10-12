@@ -44,8 +44,8 @@ class Konnect(LineReceiver):
     ping = Packet.createPing()
     self._sendPacket(ping)
 
-  def sendNotification(self, text, title, application):
-    notification = Packet.createNotification(text, title, application)
+  def sendNotification(self, text, title, application, reference):
+    notification = Packet.createNotification(text, title, application, reference)
     self._sendPacket(notification)
 
   def requestPair(self):
@@ -128,7 +128,10 @@ class Konnect(LineReceiver):
       self.factory.database.unpairDevice(self.identifier)
 
   def handleNotify(self, packet):
-    if packet.get("request") is not True:
+    if packet.get("cancel") is not None:
+      debug("Ignoring dismiss request for notification %s", packet.get("cancel"))
+      return
+    elif packet.get("request") is not True:
       return
 
     info("Registered notifications listener")
@@ -139,8 +142,9 @@ class Konnect(LineReceiver):
       text = notification[1]
       title = notification[2]
       application = notification[3]
+      reference = notification[4]
 
-      self.sendNotification(text, title, application)
+      self.sendNotification(text, title, application, reference)
       self.factory.database.dismissNotification(notification[0])
 
   def lineReceived(self, line):
@@ -200,7 +204,7 @@ class KonnectFactory(Factory):
     except AttributeError:
       return False
 
-  def sendNotification(self, identifier, text, title, application, persistent):
+  def sendNotification(self, identifier, text, title, application, reference, persistent):
     if not self.isDeviceTrusted(identifier):
       return None
 
@@ -208,14 +212,14 @@ class KonnectFactory(Factory):
       client = self._findClient(identifier)
 
       if client.notify is True:
-        client.sendNotification(text, title, application)
+        client.sendNotification(text, title, application, reference)
       else:
-        self.database.persistNotification(identifier, text, title, application)
+        self.database.persistNotification(identifier, text, title, application, reference)
 
       return True
     except AttributeError:
       if persistent is True:
-        self.database.persistNotification(identifier, text, title, application)
+        self.database.persistNotification(identifier, text, title, application, reference)
 
       return False
 

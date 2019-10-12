@@ -123,10 +123,11 @@ class API(Resource):
     else:
       text = data["text"]
       title = data["title"]
-      application = data.get("appName", "")
+      application = data.get("application", "")
+      reference = data.get("reference", None)
       persistent = data.get("persistent", False)
 
-      result = self.konnect.sendNotification(identifier, text, title, application, persistent)
+      result = self.konnect.sendNotification(identifier, text, title, application, reference, persistent)
 
       if result is True:
         response["success"] = True
