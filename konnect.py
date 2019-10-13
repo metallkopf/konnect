@@ -21,6 +21,7 @@ if __name__ == "__main__":
   parser.add_argument("--text", required="--notification" in argv)
   parser.add_argument("--title", required="--notification" in argv)
   parser.add_argument("--application", required="--notification" in argv)
+  parser.add_argument("--reference", default=None)
   args = parser.parse_args()
 
   method = None
@@ -38,11 +39,11 @@ if __name__ == "__main__":
     url = join(url, "identity")
   elif args.pair:
     method = "PUT"
-    url = join(url, "pair", args.pair)
+    url = join(url, "device", args.pair)
     data = {"pair": True}
   elif args.unpair:
     method = "PUT"
-    url = join(url, "unpair", args.unpair)
+    url = join(url, "device", args.unpair)
     data = {"pair": False}
   elif args.ping:
     method = "POST"
@@ -50,15 +51,19 @@ if __name__ == "__main__":
   elif args.notification:
     method = "POST"
     url = join(url, "notification", args.notification)
-    data = {"text": args.text, "title": args.title, "application": args.application}
+    data = {"text": args.text, "title": args.title, "application": args.application, "reference": args.reference}
 
-  response = request(method, url, json=data).json()
+  response = request(method, url, json=data)
+  data = response.json()
+
+  if response.status_code != 200:
+    print("An error ocurred!")
 
   if args.devices:
-    for identifier, device in response.items():
+    for identifier, device in data.items():
       print(identifier)
       for key, value in device.items():
         print("  %s: %s" % (key.title(), str(value)))
   elif args.device or args.identity or args.pair or args.unpair or args.ping or args.notification:
-    for key, value in response.items():
+    for key, value in data.items():
       print("%s: %s" % (key.title(), str(value)))

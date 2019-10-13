@@ -2,6 +2,7 @@
 
 from json.decoder import JSONDecodeError
 from logging import debug, error, exception, info, warning
+from uuid import uuid4
 
 from twisted.internet.protocol import DatagramProtocol, Factory
 from twisted.internet.reactor import callLater
@@ -77,7 +78,7 @@ class Konnect(LineReceiver):
   def isTrusted(self):
     return self.factory.database.isDeviceTrusted(self.identifier)
 
-  def handleIdentity(self, packet):
+  def _handleIdentity(self, packet):
     self.identifier = packet.get("deviceId")
     self.name = packet.get("deviceName", "unnamed")
     self.device = packet.get("deviceType", "unknown")
@@ -95,7 +96,7 @@ class Konnect(LineReceiver):
       info("%s uses an old protocol version, this won't work", self.name)
       self.transport.abortConnection()
 
-  def handlePairing(self, packet):
+  def _handlePairing(self, packet):
     self._cancelTimeout()
 
     if packet.get("pair") is True:
@@ -127,25 +128,25 @@ class Konnect(LineReceiver):
       self.notify = False
       self.factory.database.unpairDevice(self.identifier)
 
-  def handleNotify(self, packet):
+  def _handleNotify(self, packet):
     if packet.get("cancel") is not None:
-      debug("Ignoring dismiss request for notification %s", packet.get("cancel"))
-      return
-    elif packet.get("request") is not True:
-      return
+      reference = packet.get("cancel")
+      debug("Dismiss notification request for %s", reference)
+      self.factory.database.dismissNotification(self.identifier, reference)
+    elif packet.get("request") is True:
+      info("Registered notifications listener")
+      self.factory.database.updateDevice(self.identifier, self.name, self.device)
+      self.notify = True
 
-    info("Registered notifications listener")
-    self.factory.database.updateDevice(self.identifier, self.name, self.device)
-    self.notify = True
+      for notification in self.factory.database.showNotifications(self.identifier):
+        reference = notification[0]
+        text = notification[1]
+        title = notification[2]
+        application = notification[3]
 
-    for notification in self.factory.database.showNotifications(self.identifier):
-      text = notification[1]
-      title = notification[2]
-      application = notification[3]
-      reference = notification[4]
-
-      self.sendNotification(text, title, application, reference)
-      self.factory.database.dismissNotification(notification[0])
+        self.sendNotification(text, title, application, reference)
+    else:
+      debug("Ignoring unknown request")
 
   def lineReceived(self, line):
     try:
@@ -158,15 +159,15 @@ class Konnect(LineReceiver):
 
     if not self.transport.TLS:
       if packet.isType(PacketType.IDENTITY):
-        self.handleIdentity(packet)
+        self._handleIdentity(packet)
       else:
         warning("Device %s not identified, ignoring non encrypted packet %s", self.name, packet.getType())
     else:
       if packet.isType(PacketType.PAIR):
-        self.handlePairing(packet)
+        self._handlePairing(packet)
       elif self.isTrusted():
         if packet.isType(PacketType.REQUEST):
-          self.handleNotify(packet)
+          self._handleNotify(packet)
         elif packet.isType(PacketType.PING):
           self.sendPing()
         else:
@@ -204,23 +205,23 @@ class KonnectFactory(Factory):
     except AttributeError:
       return False
 
-  def sendNotification(self, identifier, text, title, application, reference, persistent):
+  def sendNotification(self, identifier, text, title, application, reference):
     if not self.isDeviceTrusted(identifier):
       return None
 
     try:
       client = self._findClient(identifier)
 
+      if reference is None:
+        reference = str(uuid4())
+
+      self.database.persistNotification(identifier, text, title, application, reference)
+
       if client.notify is True:
         client.sendNotification(text, title, application, reference)
-      else:
-        self.database.persistNotification(identifier, text, title, application, reference)
 
       return True
     except AttributeError:
-      if persistent is True:
-        self.database.persistNotification(identifier, text, title, application, reference)
-
       return False
 
   def requestPair(self, identifier):
