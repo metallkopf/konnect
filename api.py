@@ -117,14 +117,14 @@ class API(Resource):
     response = {"success": False}
     code = 200
 
-    if "text" not in data or "title" not in data:
+    if "text" not in data or "title" not in data or "application" not in data:
       code = 400
-      response["message"] = "text or title not found"
+      response["message"] = "text or title or application not found"
     else:
       text = data["text"]
       title = data["title"]
-      application = data.get("application", "")
-      reference = data.get("reference", None)
+      application = data["application"]
+      reference = data.get("reference", "")
 
       result = self.konnect.sendNotification(identifier, text, title, application, reference)
 

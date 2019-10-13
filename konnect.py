@@ -21,7 +21,7 @@ if __name__ == "__main__":
   parser.add_argument("--text", required="--notification" in argv)
   parser.add_argument("--title", required="--notification" in argv)
   parser.add_argument("--application", required="--notification" in argv)
-  parser.add_argument("--reference", default=None)
+  parser.add_argument("--reference", default="")
   args = parser.parse_args()
 
   method = None
