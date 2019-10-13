@@ -212,7 +212,7 @@ class KonnectFactory(Factory):
     try:
       client = self._findClient(identifier)
 
-      if reference is None:
+      if not isinstance(reference, str) or len(reference) == 0:
         reference = str(uuid4())
 
       self.database.persistNotification(identifier, text, title, application, reference)
