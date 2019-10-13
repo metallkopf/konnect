@@ -6,13 +6,14 @@ from sqlite3 import OperationalError, connect
 
 class Database:
   SCHEMA = [
-    ["CREATE TABLE config (key TEXT PRIMARY KEY, value TEXT)",
-     "CREATE TABLE trusted_devices (identifier TEXT PRIMARY KEY, certificate TEXT)",
-     "ALTER TABLE trusted_devices ADD COLUMN name TEXT",
-     "ALTER TABLE trusted_devices ADD COLUMN type TEXT"],
-    ["CREATE TABLE notifications (id INTEGER PRIMARY KEY, identifier TEXT, [text] TEXT, title TEXT, application TEXT)",
-     "CREATE INDEX notification_identifier ON notifications (identifier)"],
-    ["ALTER TABLE notifications ADD COLUMN reference TEXT"],
+    [
+      "CREATE TABLE config (key TEXT PRIMARY KEY, value TEXT)",
+      "CREATE TABLE trusted_devices (identifier TEXT PRIMARY KEY, certificate TEXT, name TEXT, type TEXT)",
+      "CREATE TABLE notifications (reference TEXT, identifier TEXT, [text] TEXT, "
+      "title TEXT, application TEXT, PRIMARY KEY (reference, identifier), "
+      "FOREIGN KEY (identifier) REFERENCES trusted_devices (identifier) ON DELETE CASCADE)",
+      "CREATE INDEX notification_identifier ON notifications (identifier)",
+     ],
   ]
 
   def __init__(self, path):
@@ -55,7 +56,7 @@ class Database:
     self.instance.execute(query, (name, device, identifier))
 
   def pairDevice(self, identifier, certificate, name, device):
-    query = "INSERT INTO trusted_devices (identifier, certificate, name, type) VALUES (?, ?, ?, ?) "\
+    query = "INSERT INTO trusted_devices (identifier, certificate, name, type) VALUES (?, ?, ?, ?) " \
       "ON CONFLICT(identifier) DO UPDATE SET certificate = excluded.certificate, name = excluded.name, type = excluded.type"
     self.instance.execute(query, (identifier, certificate, name, device))
 
@@ -64,13 +65,14 @@ class Database:
     self.instance.execute(query, (identifier,))
 
   def persistNotification(self, identifier, text, title, application, reference):
-    query = "INSERT INTO notifications (identifier, [text], title, application, reference) VALUES (?, ?, ?, ?, ?)"
+    query = "INSERT INTO notifications (identifier, [text], title, application, reference) VALUES (?, ?, ?, ?, ?)" \
+      "ON CONFLICT(reference, identifier) DO UPDATE SET text = excluded.text, title = excluded.title, application = excluded.application"
     self.instance.execute(query, (identifier, text, title, application, reference))
 
-  def dismissNotification(self, _id):
-    query = "DELETE FROM notifications WHERE id = ?"
-    self.instance.execute(query, (_id,))
+  def dismissNotification(self, identifier, reference):
+    query = "DELETE FROM notifications WHERE identifier = ? AND reference = ?"
+    self.instance.execute(query, (identifier, reference))
 
   def showNotifications(self, identifier):
-    query = "SELECT id, [text], title, application, reference FROM notifications WHERE identifier = ?"
+    query = "SELECT reference, [text], title, application FROM notifications WHERE identifier = ?"
     return self.instance.execute(query, (identifier,)).fetchall()

@@ -125,9 +125,8 @@ class API(Resource):
       title = data["title"]
       application = data.get("application", "")
       reference = data.get("reference", None)
-      persistent = data.get("persistent", False)
 
-      result = self.konnect.sendNotification(identifier, text, title, application, reference, persistent)
+      result = self.konnect.sendNotification(identifier, text, title, application, reference)
 
       if result is True:
         response["success"] = True
@@ -150,7 +149,7 @@ class API(Resource):
       response["success"] = None
 
       for identifier, device in self.konnect.getDevices().items():
-        if device["reachable"] is True:
+        if device["reachable"] is True and device["trusted"] is True:
           response[identifier], _ = self._handlePing(identifier)
     elif self.uri == "/notification":
       response["success"] = None
@@ -159,7 +158,7 @@ class API(Resource):
         data = loads(request.content.read())
 
         for identifier, device in self.konnect.getDevices().items():
-          if device["reachable"] is True:
+          if device["trusted"] is True:
             response[identifier], _ = self._handleNotification(identifier, data)
       except JSONDecodeError:
         code = 400

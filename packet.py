@@ -2,7 +2,6 @@
 
 from json import dumps, loads
 from time import time
-from uuid import uuid4
 
 
 class PacketType:
@@ -65,9 +64,9 @@ class Packet:
     return packet
 
   @staticmethod
-  def createNotification(text, title="", application="", reference=None):
+  def createNotification(text, title, application, reference):
     packet = Packet(PacketType.NOTIFICATION)
-    packet.set("id", reference or str(uuid4()))
+    packet.set("id", reference)
     packet.set("appName", application)
     packet.set("title", title)
     packet.set("text", text)
