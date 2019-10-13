@@ -13,6 +13,7 @@ twisted = "*"
 pyopenssl = "*"
 service-identity = "*"
 systemd-python = "*"
+requests = "*"
 
 [requires]
 python_version = "3.7"
