@@ -1,55 +1,64 @@
 #!/usr/bin/env python3
 
 from argparse import ArgumentParser
-from logging import DEBUG, INFO, basicConfig
-from platform import node
-from uuid import uuid4
+from os.path import join
+from sys import argv
 
-from OpenSSL.crypto import Error
-from systemd.journal import JournalHandler
-from twisted.internet import reactor
-from twisted.web.server import Site
-
-from api import API
-from certificate import Certificate
-from database import Database
-from protocols import Discovery, KonnectFactory
+from requests import request
 
 
 if __name__ == "__main__":
   parser = ArgumentParser()
-  parser.add_argument("--name", default=node())
-  parser.add_argument("--verbose", action="store_true", default=True)
-  parser.add_argument("--discovery-port", default=1716, type=int, dest="discovery_port")
-  parser.add_argument("--service-port", default=1764, type=int, dest="service_port", choices=range(1716, 1765))
-  parser.add_argument("--admin-port", default=8080, type=int, dest="admin_port")
-  parser.add_argument("--config-dir", default="", dest="config_dir")
-  parser.add_argument("--receiver", action="store_true", default=False)
-  parser.add_argument("--service", action="store_true", default=False)
+  parser.add_argument("--port", default=8080, type=int)
+  group = parser.add_mutually_exclusive_group(required=True)
+  group.add_argument("--devices", action="store_true")
+  group.add_argument("--identity", action="store_true")
+  group.add_argument("--pair", metavar="IDENTIFIER")
+  group.add_argument("--unpair", metavar="IDENTIFIER")
+  group.add_argument("--ping", metavar="IDENTIFIER")
+  group.add_argument("--device", metavar="IDENTIFIER")
+  group.add_argument("--notification", metavar="IDENTIFIER")
+  parser.add_argument("--text", required="--notification" in argv)
+  parser.add_argument("--title", required="--notification" in argv)
+  parser.add_argument("--application", required="--notification" in argv)
   args = parser.parse_args()
 
-  level = DEBUG if args.verbose else INFO
+  method = None
+  url = "http://localhost:%d" % args.port
+  data = {}
 
-  if args.service is True:
-    handler = JournalHandler(SYSLOG_IDENTIFIER='konnect')
-    basicConfig(format="%(levelname)s %(message)s", level=level, handlers=[handler])
-  else:
-    basicConfig(format="%(asctime)s %(levelname)s %(message)s", level=level)
+  if args.devices:
+    method = "GET"
+    url = join(url, "device")
+  elif args.device:
+    method = "GET"
+    url = join(url, "device", args.device)
+  elif args.identity:
+    method = "POST"
+    url = join(url, "identity")
+  elif args.pair:
+    method = "PUT"
+    url = join(url, "pair", args.pair)
+    data = {"pair": True}
+  elif args.unpair:
+    method = "PUT"
+    url = join(url, "unpair", args.unpair)
+    data = {"pair": False}
+  elif args.ping:
+    method = "POST"
+    url = join(url, "ping", args.ping)
+  elif args.notification:
+    method = "POST"
+    url = join(url, "notification", args.notification)
+    data = {"text": args.text, "title": args.title, "application": args.application}
 
-  database = Database(args.config_dir)
+  response = request(method, url, json=data).json()
 
-  try:
-    options = Certificate.load_options(args.config_dir)
-    identifier = Certificate.extract_identifier(options)
-  except (FileNotFoundError, Error):
-    identifier = str(uuid4()).replace("-", "")
-    Certificate.generate(identifier, args.config_dir)
-    options = Certificate.load_options(args.config_dir)
-
-  konnect = KonnectFactory(database, identifier, options)
-  discovery = Discovery(identifier, args.name, args.discovery_port, args.service_port)
-
-  reactor.listenTCP(args.service_port, konnect, interface="0.0.0.0")
-  reactor.listenUDP(args.discovery_port if args.receiver else 0, discovery, interface="0.0.0.0")
-  reactor.listenTCP(args.admin_port, Site(API(konnect, discovery)), interface="127.0.0.1")
-  reactor.run()
+  if args.devices:
+    for identifier, device in response.items():
+      print(identifier)
+      for key, value in device.items():
+        print("  %s: %s" % (key.title(), str(value)))
+  elif args.device or args.identity or args.pair or args.unpair or args.ping or args.notification:
+    for key, value in response.items():
+      print("%s: %s" % (key.title(), str(value)))

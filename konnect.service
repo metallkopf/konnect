@@ -6,8 +6,8 @@ After=network.target
 User=user
 Restart=always
 Type=simple
-WorkingDirectory=/home/user
-ExecStart=/usr/bin/pipenv run python konnect.py --receiver
+WorkingDirectory=/home/user/konnect
+ExecStart=/usr/bin/pipenv run python konnectd.py --receiver --service
 
 [Install]
 WantedBy=multi-user.target
