@@ -25,7 +25,6 @@ class Konnect(LineReceiver):
   name = "unnamed"
   device = "unknown"
   timeout = None
-  notify = False
 
   def connectionMade(self):
     self.transport.setTcpKeepAlive(1)
@@ -52,22 +51,18 @@ class Konnect(LineReceiver):
   def requestPair(self):
     self.status = InternalStatus.REQUESTED
     self._cancelTimeout()
-    self.timeout = callLater(30, self._requestPairTimeout)
+    self.timeout = callLater(30, self.requestUnpair)
     pair = Packet.createPair(True)
     self._sendPacket(pair)
 
-  def _requestPairTimeout(self):
-    info("Pairing request timed out")
-    self.status = InternalStatus.NOT_PAIRED
-    pair = Packet.createPair(False)
-    self._sendPacket(pair)
-
   def requestUnpair(self):
+    if self.status == InternalStatus.REQUESTED:
+      info("Pairing request timed out")
+
     self._cancelTimeout()
+    self.status = InternalStatus.NOT_PAIRED
     pair = Packet.createPair(False)
     self._sendPacket(pair)
-    self.status = InternalStatus.NOT_PAIRED
-    self.notify = False
     self.factory.database.unpairDevice(self.identifier)
 
   def _cancelTimeout(self):
@@ -125,7 +120,6 @@ class Konnect(LineReceiver):
         info("Canceled by other peer")
 
       self.status = InternalStatus.NOT_PAIRED
-      self.notify = False
       self.factory.database.unpairDevice(self.identifier)
 
   def _handleNotify(self, packet):
@@ -136,7 +130,6 @@ class Konnect(LineReceiver):
     elif packet.get("request") is True:
       info("Registered notifications listener")
       self.factory.database.updateDevice(self.identifier, self.name, self.device)
-      self.notify = True
 
       for notification in self.factory.database.showNotifications(self.identifier):
         reference = notification[0]
@@ -216,9 +209,7 @@ class KonnectFactory(Factory):
         reference = str(uuid4())
 
       self.database.persistNotification(identifier, text, title, application, reference)
-
-      if client.notify is True:
-        client.sendNotification(text, title, application, reference)
+      client.sendNotification(text, title, application, reference)
 
       return True
     except AttributeError:
@@ -277,7 +268,7 @@ class Discovery(DatagramProtocol):
   def datagramReceived(self, datagram, addr):
     try:
       packet = Packet.load(datagram)
-      debug("RecvFrom(%s) - %s", addr, packet)
+      debug("RecvFrom(%s:%d) - %s", addr[0], addr[1], packet)
     except JSONDecodeError as e:
       error("Unserialization error: %s", datagram)
       exception(e)
