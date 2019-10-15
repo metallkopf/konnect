@@ -22,7 +22,7 @@ if __name__ == "__main__":
   parser.add_argument("--verbose", action="store_true", default=True, help="Show debug messages")
   parser.add_argument("--discovery-port", default=1716, type=int, dest="discovery_port", help="Protocol discovery port")
   parser.add_argument("--service-port", default=1764, type=int, dest="service_port", choices=range(1716, 1765), help="Protocol service port")
-  parser.add_argument("--admin-port", default=8080, type=int, dest="admin_port", help="Admin api port")
+  parser.add_argument("--admin-port", default=8080, type=int, dest="admin_port", help="Admin Rest API port")
   parser.add_argument("--config-dir", default="", dest="config_dir", help="Where to save the config")
   parser.add_argument("--receiver", action="store_true", default=False, help="Listen for new devices")
   parser.add_argument("--service", action="store_true", default=False, help="Send logs to journald")

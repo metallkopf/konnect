@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 from os.path import join
 from sqlite3 import OperationalError, connect
 
@@ -56,8 +54,7 @@ class Database:
     self.instance.execute(query, (name, device, identifier))
 
   def pairDevice(self, identifier, certificate, name, device):
-    query = "INSERT INTO trusted_devices (identifier, certificate, name, type) VALUES (?, ?, ?, ?) " \
-      "ON CONFLICT(identifier) DO UPDATE SET certificate = excluded.certificate, name = excluded.name, type = excluded.type"
+    query = "INSERT INTO trusted_devices (identifier, certificate, name, type) VALUES (?, ?, ?, ?)"
     self.instance.execute(query, (identifier, certificate, name, device))
 
   def unpairDevice(self, identifier):
