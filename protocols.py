@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 from json.decoder import JSONDecodeError
 from logging import debug, error, exception, info, warning
 from uuid import uuid4
@@ -98,11 +96,15 @@ class Konnect(LineReceiver):
       if self.status == InternalStatus.REQUESTED:
         info("Pair answer")
         certificate = Certificate(self.transport.getPeerCertificate()).dumpPEM()
-        self.factory.database.pairDevice(self.identifier, certificate, self.name, self.device)
         self.status = InternalStatus.PAIRED
+
+        if self.isTrusted():
+          self.factory.database.updateDevice(self.identifier, self.name, self.device)
+        else:
+          self.factory.database.pairDevice(self.identifier, certificate, self.name, self.device)
       else:
         info("Pair request")
-        pair = Packet.createPair(None)
+        pair = Packet.createPair(False)
 
         if self.status == InternalStatus.PAIRED or self.isTrusted():
           info("I'm already paired, but they think I'm not")
@@ -110,7 +112,6 @@ class Konnect(LineReceiver):
           pair.set("pair", True)
         else:
           info("Pairing started by the other end, rejecting their request")
-          pair.set("pair", False)
 
         self._sendPacket(pair)
     else:

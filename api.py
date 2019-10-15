@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 from json import dumps, loads
 from json.decoder import JSONDecodeError
 from logging import info

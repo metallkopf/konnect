@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 from datetime import datetime, timedelta
 from logging import debug
 from os.path import join
