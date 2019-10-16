@@ -177,9 +177,10 @@ class KonnectFactory(Factory):
   protocol = Konnect
   clients = set()
 
-  def __init__(self, database, identifier, options):
+  def __init__(self, database, identifier, name, options):
     self.database = database
     self.identifier = identifier
+    self.name = name
     self.options = options
 
   def _findClient(self, identifier):
@@ -238,13 +239,13 @@ class KonnectFactory(Factory):
     devices = {}
 
     for trusted in self.database.getTrustedDevices():
-      devices[trusted[0]] = {"name": trusted[1], "type": trusted[2], "reachable": False, "trusted": True}
+      devices[trusted[0]] = {"identifier": trusted[0], "name": trusted[1], "type": trusted[2], "reachable": False, "trusted": True}
 
     for client in self.clients:
       trusted = client.identifier in devices
-      devices[client.identifier] = {"name": client.name, "type": client.device, "reachable": True, "trusted": trusted}
+      devices[client.identifier] = {"identifier": client.identifier, "name": client.name, "type": client.device, "reachable": True, "trusted": trusted}
 
-    return devices
+    return list(devices.values())
 
 
 class Discovery(DatagramProtocol):

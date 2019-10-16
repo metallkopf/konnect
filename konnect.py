@@ -33,24 +33,24 @@ if __name__ == "__main__":
     url = join(url, "device")
   elif args.device:
     method = "GET"
-    url = join(url, "device", args.device)
+    url = join(url, "device", "identifier", args.device)
   elif args.identity:
     method = "POST"
     url = join(url, "identity")
   elif args.pair:
     method = "PUT"
-    url = join(url, "device", args.pair)
+    url = join(url, "device", "identifier", args.pair)
     data = {"pair": True}
   elif args.unpair:
     method = "PUT"
-    url = join(url, "device", args.unpair)
+    url = join(url, "device", "identifier", args.unpair)
     data = {"pair": False}
   elif args.ping:
     method = "POST"
-    url = join(url, "ping", args.ping)
+    url = join(url, "ping", "identifier", args.ping)
   elif args.notification:
     method = "POST"
-    url = join(url, "notification", args.notification)
+    url = join(url, "notification", "identifier", args.notification)
     data = {"text": args.text, "title": args.title, "application": args.application, "reference": args.reference}
 
   response = request(method, url, json=data)
@@ -60,10 +60,8 @@ if __name__ == "__main__":
     print("An error ocurred!")
 
   if args.devices:
-    for identifier, device in data.items():
-      print(identifier)
-      for key, value in device.items():
-        print("  %s: %s" % (key.title(), str(value)))
+    for device in data:
+      print("- {name}: {identifier} (Trusted:{trusted} Reachable:{reachable})".format(**device))
   elif args.device or args.identity or args.pair or args.unpair or args.ping or args.notification:
     for key, value in data.items():
       print("%s: %s" % (key.title(), str(value)))
