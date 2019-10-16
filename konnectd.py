@@ -46,7 +46,7 @@ if __name__ == "__main__":
     Certificate.generate(identifier, args.config_dir)
     options = Certificate.load_options(args.config_dir)
 
-  konnect = KonnectFactory(database, identifier, options)
+  konnect = KonnectFactory(database, identifier, args.name, options)
   discovery = Discovery(identifier, args.name, args.discovery_port, args.service_port)
 
   reactor.listenTCP(args.service_port, konnect, interface="0.0.0.0")

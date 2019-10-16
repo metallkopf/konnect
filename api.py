@@ -1,6 +1,7 @@
 from json import dumps, loads
 from json.decoder import JSONDecodeError
 from logging import info
+from re import match
 
 from twisted.web.resource import Resource
 
@@ -12,6 +13,13 @@ class API(Resource):
     super().__init__()
     self.konnect = konnect
     self.discovery = discovery
+
+  def _getDeviceBy(self, key, value):
+    for device in self.konnect.getDevices():
+      if device[key] == value:
+        return device
+
+    return None
 
   def render(self, request):
     request.setHeader(b"content-type", b"application/json")
@@ -27,48 +35,60 @@ class API(Resource):
     code = 200
 
     if self.uri == "/":
-      pass
+      response = {"id": self.konnect.identifier, "name": self.konnect.name}
     elif self.uri == "/device":
       response = self.konnect.getDevices()
-    elif self.uri.startswith("/device/"):
-      identifier = self.uri[1:].split("/", 1)[-1]
-      device = self.konnect.getDevices().get(identifier)
-
-      if device is None:
-        code = 404
-      else:
-        response = device
     else:
-      code = 404
+      matches = match(r"^\/device\/(?P<key>identifier|name)\/(?P<value>[a-zA-Z0-9_]+)$", self.uri)
+
+      if matches:
+        device = self._getDeviceBy(matches.group("key"), matches.group("value"))
+
+        if device is None:
+          code = 404
+        else:
+          response = device
+      else:
+        code = 400
 
     request.setResponseCode(code)
     return dumps(response).encode()
 
-  def _handlePairing(self, identifier, pair):
+  def _handlePairing(self, identifier, data):
     response = {"success": False}
     code = 200
 
-    if pair is True:
-      result = self.konnect.requestPair(identifier)
+    try:
+      data = loads(data)
+      pair = bool(data["pair"])
 
-      if result is False:
-        response["success"] = True
-      elif result is True:
-        response["message"] = "already paired"
-      elif result is None:
-        code = 404
-        response["message"] = "device not reachable"
-    else:
-      result = self.konnect.requestUnpair(identifier)
+      if pair is True:
+        result = self.konnect.requestPair(identifier)
 
-      if result is True:
-        response["success"] = True
-      elif result is False:
-        code = 401
-        response["message"] = "device not paired"
-      elif result is None:
-        code = 404
-        response["message"] = "device not reachable"
+        if result is False:
+          response["success"] = True
+        elif result is True:
+          response["message"] = "already paired"
+        elif result is None:
+          code = 404
+          response["message"] = "device not reachable"
+      else:
+        result = self.konnect.requestUnpair(identifier)
+
+        if result is True:
+          response["success"] = True
+        elif result is False:
+          code = 401
+          response["message"] = "device not paired"
+        elif result is None:
+          code = 404
+          response["message"] = "device not reachable"
+    except IndexError:
+      code = 400
+      response["message"] = "pair not found"
+    except JSONDecodeError:
+      code = 400
+      response["message"] = "unserialization error"
 
     return response, code
 
@@ -76,19 +96,12 @@ class API(Resource):
     response = {}
     code = 200
 
-    if self.uri.startswith("/device/"):
-      try:
-        identifier = self.uri[1:].split("/", 1)[-1]
-        data = loads(request.content.read())
-        pair = bool(data["pair"])
+    matches = match(r"^\/device\/(?P<key>identifier|name)\/(?P<value>[a-zA-Z0-9_]+)$", self.uri)
 
-        response, code = self._handlePairing(identifier, pair)
-      except IndexError:
-        code = 400
-        response["message"] = "pair not found"
-      except JSONDecodeError:
-        code = 400
-        response["message"] = "unserialization error"
+    if matches:
+      device = self._getDeviceBy(matches.group("key"), matches.group("value"))
+
+      response, code = self._handlePairing(device["identifier"], request.content.read())
     else:
       code = 404
 
@@ -115,25 +128,31 @@ class API(Resource):
     response = {"success": False}
     code = 200
 
-    if "text" not in data or "title" not in data or "application" not in data:
+    try:
+      data = loads(data)
+
+      if "text" not in data or "title" not in data or "application" not in data:
+        code = 400
+        response["message"] = "text or title or application not found"
+      else:
+        text = data["text"]
+        title = data["title"]
+        application = data["application"]
+        reference = data.get("reference", "")
+
+        result = self.konnect.sendNotification(identifier, text, title, application, reference)
+
+        if result is True:
+          response["success"] = True
+        elif result is False:
+          code = 404
+          response["message"] = "device not reachable"
+        elif result is None:
+          code = 401
+          response["message"] = "device not paired"
+    except JSONDecodeError:
       code = 400
-      response["message"] = "text or title or application not found"
-    else:
-      text = data["text"]
-      title = data["title"]
-      application = data["application"]
-      reference = data.get("reference", "")
-
-      result = self.konnect.sendNotification(identifier, text, title, application, reference)
-
-      if result is True:
-        response["success"] = True
-      elif result is False:
-        code = 404
-        response["message"] = "device not reachable"
-      elif result is None:
-        code = 401
-        response["message"] = "device not paired"
+      response["message"] = "unserialization error"
 
     return response, code
 
@@ -146,35 +165,40 @@ class API(Resource):
     elif self.uri == "/ping":
       response["success"] = None
 
-      for identifier, device in self.konnect.getDevices().items():
+      for device in self.konnect.getDevices():
+        identifier = device["identifier"]
+
         if device["reachable"] is True and device["trusted"] is True:
           response[identifier], _ = self._handlePing(identifier)
     elif self.uri == "/notification":
       response["success"] = None
 
       try:
-        data = loads(request.content.read())
+        data = request.content.read()
+        loads(data)
 
-        for identifier, device in self.konnect.getDevices().items():
+        for device in self.konnect.getDevices():
+          identifier = device["identifier"]
+
           if device["trusted"] is True:
             response[identifier], _ = self._handleNotification(identifier, data)
       except JSONDecodeError:
         code = 400
         response["message"] = "unserialization error"
-    elif self.uri.startswith("/ping/") or self.uri.startswith("/notification/"):
-      identifier = self.uri[1:].split("/", 1)[-1]
-
-      if self.uri.startswith("/ping/"):
-        response, code = self._handlePing(identifier)
-      else:
-        try:
-          data = loads(request.content.read())
-          response, code = self._handleNotification(identifier, data)
-        except JSONDecodeError:
-          code = 400
-          response["message"] = "unserialization error"
     else:
-      code = 404
+      matches = match(r"^\/(?P<resource>ping|notification)\/(?P<key>identifier|name)\/(?P<value>[a-zA-Z0-9_]+)$", self.uri)
+
+      if matches:
+        device = self._getDeviceBy(matches.group("key"), matches.group("value"))
+
+        if matches.group("resource") == "ping":
+          response, code = self._handlePing(device["identifier"])
+        elif matches.group("resource") == "notification":
+          response, code = self._handleNotification(device["identifier"], request.content.read())
+        else:
+          code = 404
+      else:
+        code = 400
 
     request.setResponseCode(code)
     return dumps(response).encode()
