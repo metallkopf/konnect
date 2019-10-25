@@ -1,6 +1,6 @@
 from json import dumps, loads
 from json.decoder import JSONDecodeError
-from logging import info
+from logging import error, info
 from re import match
 
 from twisted.web.resource import Resource
@@ -23,12 +23,16 @@ class API(Resource):
 
   def render(self, request):
     request.setHeader(b"content-type", b"application/json")
-    address = request.getClientAddress()
-    self.client = "{}:{}".format(address.host, address.port)
     self.uri = request.uri.decode()
-    info("%s - %s %s", self.client, request.method.decode(), self.uri)
+    response = super().render(request)
 
-    return super().render(request)
+    address = request.getClientAddress()
+    if request.code // 100 == 2:
+      info("%s:%d - %s %s - %d", address.host, address.port, request.method.decode(), self.uri, request.code)
+    else:
+      error("%s:%d - %s %s - %d", address.host, address.port, request.method.decode(), self.uri, request.code)
+
+    return response
 
   def render_GET(self, request):
     response = {}
@@ -39,7 +43,7 @@ class API(Resource):
     elif self.uri == "/device":
       response = self.konnect.getDevices()
     else:
-      matches = match(r"^\/device\/(?P<key>identifier|name)\/(?P<value>[a-zA-Z0-9_]+)$", self.uri)
+      matches = match(r"^\/device\/(?P<key>identifier|name)\/(?P<value>[\w\-.@]+)$", self.uri)
 
       if matches:
         device = self._getDeviceBy(matches.group("key"), matches.group("value"))
@@ -96,7 +100,7 @@ class API(Resource):
     response = {}
     code = 200
 
-    matches = match(r"^\/device\/(?P<key>identifier|name)\/(?P<value>[a-zA-Z0-9_]+)$", self.uri)
+    matches = match(r"^\/device\/(?P<key>identifier|name)\/(?P<value>[\w\-.@]+)$", self.uri)
 
     if matches:
       device = self._getDeviceBy(matches.group("key"), matches.group("value"))
@@ -186,7 +190,7 @@ class API(Resource):
         code = 400
         response["message"] = "unserialization error"
     else:
-      matches = match(r"^\/(?P<resource>ping|notification)\/(?P<key>identifier|name)\/(?P<value>[a-zA-Z0-9_]+)$", self.uri)
+      matches = match(r"^\/(?P<resource>ping|notification)\/(?P<key>identifier|name)\/(?P<value>[\w\-.@]+)$", self.uri)
 
       if matches:
         device = self._getDeviceBy(matches.group("key"), matches.group("value"))
