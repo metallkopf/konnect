@@ -13,15 +13,15 @@ from twisted.internet.ssl import PrivateCertificate
 
 
 class Certificate:
-  CERTIFICATE = "certificate.pem"
-  PRIVATE_KEY = "privateKey.pem"
+  CERTIFICATE_FILE = "certificate.pem"
+  PRIVATE_KEY_FILE = "privateKey.pem"
 
   @staticmethod
   def generate(identifier, path):
     debug("Generating private key")
-    key = generate_private_key(65537, 2048, default_backend())
+    key = generate_private_key(public_exponent=65537, key_size=2048, backend=default_backend())
 
-    with open(join(path, Certificate.PRIVATE_KEY), "wb+") as pem:
+    with open(join(path, Certificate.PRIVATE_KEY_FILE), "wb+") as pem:
       pem.write(key.private_bytes(Encoding.PEM, PrivateFormat.TraditionalOpenSSL, NoEncryption()))
 
     name = Name([
@@ -38,7 +38,7 @@ class Certificate:
       public_key(key.public_key()).serial_number(1).not_valid_before(before).\
       not_valid_after(after).sign(key, SHA256(), default_backend())
 
-    with open(join(path, Certificate.CERTIFICATE), "wb+") as pem:
+    with open(join(path, Certificate.CERTIFICATE_FILE), "wb+") as pem:
       pem.write(cert.public_bytes(Encoding.PEM))
 
   @staticmethod
@@ -47,8 +47,8 @@ class Certificate:
 
   @staticmethod
   def load_options(path):
-    certificate = open(join(path, Certificate.CERTIFICATE), "rb").read() + \
-      open(join(path, Certificate.PRIVATE_KEY), "rb").read()
+    certificate = open(join(path, Certificate.CERTIFICATE_FILE), "rb").read() + \
+      open(join(path, Certificate.PRIVATE_KEY_FILE), "rb").read()
     pem = PrivateCertificate.loadPEM(certificate)
 
     return pem.options()
