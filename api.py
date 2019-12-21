@@ -5,6 +5,8 @@ from re import match
 
 from twisted.web.resource import Resource
 
+from version import __version__
+
 
 class API(Resource):
   isLeaf = True
@@ -39,7 +41,7 @@ class API(Resource):
     code = 200
 
     if self.uri == "/":
-      response = {"id": self.konnect.identifier, "name": self.konnect.name}
+      response = {"id": self.konnect.identifier, "name": self.konnect.name, "application": "Konnect " + __version__}
     elif self.uri == "/device":
       response = self.konnect.getDevices()
     else:

@@ -2,13 +2,15 @@
 
 from argparse import ArgumentParser
 from os.path import join
-from sys import argv
+from sys import argv, exit
 
 from requests import request
 
+from version import __version__
+
 
 if __name__ == "__main__":
-  parser = ArgumentParser()
+  parser = ArgumentParser(add_help=False, allow_abbrev=False)
   parser.add_argument("--port", default=8080, type=int, help="Port running the admin interface")
 
   root = parser.add_argument_group("arguments")
@@ -16,6 +18,8 @@ if __name__ == "__main__":
   main.add_argument("--devices", action="store_true", help="List all devices")
   main.add_argument("--announce", action="store_true", help="Search for devices in the network")
   main.add_argument("--command", choices=["info", "pair", "unpair", "ping", "notification"])
+  main.add_argument("--help", action="store_true", help="This help")
+  main.add_argument("--version", action="store_true", help="Version information")
 
   is_command = "--command" in argv
   command = parser.add_argument_group("command arguments")
@@ -31,6 +35,14 @@ if __name__ == "__main__":
   message.add_argument("--reference", metavar="REF", default="", help="An (optional) unique notification id")
 
   args = parser.parse_args()
+
+  if args.help:
+    parser.print_help()
+    exit()
+  elif args.version:
+    print("Konnect " + __version__)
+    exit()
+
   method = None
   url = "http://localhost:%d" % args.port
   data = {}
