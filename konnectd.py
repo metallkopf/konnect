@@ -43,7 +43,7 @@ if __name__ == "__main__":
   level = DEBUG if args.verbose else INFO
 
   if args.service is True:
-    handler = JournalHandler(SYSLOG_IDENTIFIER='konnect')
+    handler = JournalHandler(SYSLOG_IDENTIFIER="konnectd")
     basicConfig(format="%(levelname)s %(message)s", level=level, handlers=[handler])
   else:
     basicConfig(format="%(asctime)s %(levelname)s %(message)s", level=level)

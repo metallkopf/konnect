@@ -1,5 +1,4 @@
-certificate.pem
-privateKey.pem
+*.pem
 konnect.db
 Pipfile.lock
 test.py

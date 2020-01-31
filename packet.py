@@ -1,5 +1,6 @@
 from json import dumps, loads
 from time import time
+from uuid import uuid4
 
 
 class PacketType:
@@ -19,6 +20,8 @@ class Packet:
     self.data["id"] = None if _type is None else round(time() * 1000)
     self.data["type"] = _type
     self.data["body"] = {}
+    self.data["payloadSize"] = 0
+    self.data["payloadTransferInfo"] = {}
 
   def __bytes__(self):
     return dumps(self.data).encode()
@@ -64,7 +67,7 @@ class Packet:
   @staticmethod
   def createNotification(text, title, application, reference):
     packet = Packet(PacketType.NOTIFICATION)
-    packet.set("id", reference)
+    packet.set("id", reference or str(uuid4()))
     packet.set("appName", application)
     packet.set("title", title)
     packet.set("text", text)
