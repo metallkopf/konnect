@@ -77,6 +77,14 @@ class Packet:
     return packet
 
   @staticmethod
+  def createCancel(reference):
+    packet = Packet(PacketType.NOTIFICATION)
+    packet.set("id", reference)
+    packet.set("isCancel", True)
+
+    return packet
+
+  @staticmethod
   def createPing():
     return Packet(PacketType.PING)
 

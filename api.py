@@ -162,6 +162,31 @@ class API(Resource):
 
     return response, code
 
+  def render_DELETE(self, request):
+    response = {"success": False}
+    code = 200
+
+    matches = match(r"^\/notification\/(?P<key>identifier|name)\/(?P<value>[\w\-.@]+)\/(?P<reference>.*)$", self.uri)
+
+    if matches:
+      device = self._getDeviceBy(matches.group("key"), matches.group("value"))
+      reference = matches.group("reference")
+      result = self.konnect.sendCancel(device["identifier"], reference)
+
+      if result is True:
+        response["success"] = True
+      elif result is False:
+        code = 404
+        response["message"] = "device not reachable"
+      elif result is None:
+        code = 401
+        response["message"] = "device not paired"
+    else:
+      code = 400
+
+    request.setResponseCode(code)
+    return dumps(response).encode()
+
   def render_POST(self, request):
     response = {"success": False}
     code = 200

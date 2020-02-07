@@ -8,7 +8,7 @@ class Database:
       "CREATE TABLE config (key TEXT PRIMARY KEY, value TEXT)",
       "CREATE TABLE trusted_devices (identifier TEXT PRIMARY KEY, certificate TEXT, name TEXT, type TEXT)",
       "CREATE TABLE notifications (reference TEXT, identifier TEXT, [text] TEXT, "
-      "title TEXT, application TEXT, PRIMARY KEY (reference, identifier), "
+      "title TEXT, application TEXT, PRIMARY KEY (identifier, reference), "
       "FOREIGN KEY (identifier) REFERENCES trusted_devices (identifier) ON DELETE CASCADE)",
       "CREATE INDEX notification_identifier ON notifications (identifier)",
      ],
@@ -63,7 +63,7 @@ class Database:
 
   def persistNotification(self, identifier, text, title, application, reference):
     query = "INSERT INTO notifications (identifier, [text], title, application, reference) VALUES (?, ?, ?, ?, ?)" \
-      "ON CONFLICT(reference, identifier) DO UPDATE SET text = excluded.text, title = excluded.title, application = excluded.application"
+      "ON CONFLICT(identifier, reference) DO UPDATE SET text = excluded.text, title = excluded.title, application = excluded.application"
     self.instance.execute(query, (identifier, text, title, application, reference))
 
   def dismissNotification(self, identifier, reference):
