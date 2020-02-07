@@ -46,6 +46,10 @@ class Konnect(LineReceiver):
     notification = Packet.createNotification(text, title, application, reference)
     self._sendPacket(notification)
 
+  def sendCancel(self, reference):
+    cancel = Packet.createCancel(reference)
+    self._sendPacket(cancel)
+
   def requestPair(self):
     self.status = InternalStatus.REQUESTED
     self._cancelTimeout()
@@ -212,6 +216,20 @@ class KonnectFactory(Factory):
 
       self.database.persistNotification(identifier, text, title, application, reference)
       client.sendNotification(text, title, application, reference)
+
+      return True
+    except AttributeError:
+      return False
+
+  def sendCancel(self, identifier, reference):
+    if not self.isDeviceTrusted(identifier):
+      return None
+
+    try:
+      client = self._findClient(identifier)
+
+      self.database.dismissNotification(identifier, reference)
+      client.sendCancel(reference)
 
       return True
     except AttributeError:
