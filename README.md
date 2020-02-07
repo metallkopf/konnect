@@ -1,5 +1,5 @@
 # Konnect - server app
-Konnect is an application/service based on [KDE Connect](https://community.kde.org/KDEConnect) protocol that allows a non-interactive enviroment (server) to send notifications to your devices via Rest API or CLI
+Konnect is an application based on [KDE Connect](https://community.kde.org/KDEConnect) protocol that allows a non-interactive enviroment (server) to send notifications to your devices via Rest API or a simple CLI
 
 ## Prerequisites
 - python 3.7+
@@ -138,6 +138,7 @@ notification arguments:
 | POST | /ping | Ping devices | |
 | POST | /ping/(name\|identifier)/:value | Ping device | |
 | POST | /notification/(name\|identifier)/:value | Send notification | text, title, application, reference (optional) |
+| DELETE | /notification/(name\|identifier)/:value/:reference | Cancel notification | |
 
 ## Compatibility
 Tested on [kdeconnect](https://invent.kde.org/kde/kdeconnect-kde) 1.3.3-1.4.0 and [kdeconnect-android](https://f-droid.org/en/packages/org.kde.kdeconnect_tp/) 1.13.0+ with protocol version 7

@@ -17,7 +17,7 @@ if __name__ == "__main__":
   main = root.add_mutually_exclusive_group(required=True)
   main.add_argument("--devices", action="store_true", help="List all devices")
   main.add_argument("--announce", action="store_true", help="Search for devices in the network")
-  main.add_argument("--command", choices=["info", "pair", "unpair", "ping", "notification"])
+  main.add_argument("--command", choices=["info", "pair", "unpair", "ping", "notification", "cancel"])
   main.add_argument("--help", action="store_true", help="This help")
   main.add_argument("--version", action="store_true", help="Version information")
 
@@ -33,6 +33,10 @@ if __name__ == "__main__":
   message.add_argument("--title", help="The title of the notification", required=is_notification)
   message.add_argument("--application", metavar="APP", help="The app that generated the notification", required=is_notification)
   message.add_argument("--reference", metavar="REF", default="", help="An (optional) unique notification id")
+
+  is_cancel = is_command and "cancel" in argv
+  dismiss = parser.add_argument_group("cancel arguments")
+  dismiss.add_argument("--reference2", metavar="REF2", help="Notification id")
 
   args = parser.parse_args()
 
@@ -75,6 +79,9 @@ if __name__ == "__main__":
       method = "POST"
       url = join(url, "notification", key, value)
       data = {"text": args.text, "title": args.title, "application": args.application, "reference": args.reference}
+    elif args.command == "cancel":
+      method = "DELETE"
+      url = join(url, "notification", key, value, args.reference2)
 
   response = request(method, url, json=data)
   data = response.json()
