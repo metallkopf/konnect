@@ -56,7 +56,7 @@ if __name__ == "__main__":
     url = join(url, "device")
   elif args.announce:
     method = "POST"
-    url = join(url, "identity")
+    url = join(url, "announce")
   else:
     key = "identifier" if args.identifier else "name"
     value = args.identifier or args.name
@@ -65,13 +65,11 @@ if __name__ == "__main__":
       method = "GET"
       url = join(url, "device", key, value)
     elif args.command == "pair":
-      method = "PUT"
+      method = "POST"
       url = join(url, "device", key, value)
-      data = {"pair": True}
     elif args.command == "unpair":
-      method = "PUT"
+      method = "DELETE"
       url = join(url, "device", key, value)
-      data = {"pair": False}
     elif args.command == "ping":
       method = "POST"
       url = join(url, "ping", key, value)

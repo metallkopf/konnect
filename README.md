@@ -35,42 +35,42 @@ $ sudo systemctl enable konnect
 ## Examples
 - List available devices
 ```bash
-# CLI
-$ pipenv run python konnect.py --devices
 # Rest API
 $ curl -s -X GET http://localhost:8080/device
+# CLI
+$ pipenv run python konnect.py --devices
 
 - user@remotehost: 00112233_4455_6677_8899-aabbccddeeff (Trusted:False Reachable:True)
 - smartphone: abcdef0123456789 (Trusted:False Reachable:True)
 ```
 - Pair with device
 ```bash
+# Rest API
+$ curl -s -X POST http://localhost:8080/device/name/user@remotehost
 # CLI
 $ pipenv run python konnect.py --name user@remotehost --command pair
-# Rest API
-$ curl -s -X PUT -d '{"pair":true}' http://localhost:8080/device/name/user@remotehost
 ```
 - Accept pairing request on remote host
-- Check connectivity by sending ping
+- Check successful pairing by sending ping
 ```bash
-# CLI
-$ pipenv run python konnect.py --name user@remotehost --command ping
 # Rest API
 $ curl -s -X POST http://localhost:8080/ping/name/user@remotehost
+# CLI
+$ pipenv run python konnect.py --name user@remotehost --command ping
 ```
 - Send notification
 ```bash
-# CLI
-$ pipenv run python konnect.py --name user@remotehost --command notification --title maintenance --text updates_available --application package_manager --reference update
 # Rest API
 $ curl -s -X POST -d '{"application":"Package Manager","title":"Maintenance","text":"There are updates available!","reference":"update"}' http://localhost:8080/notification/name/user@remotehost
+# CLI
+$ pipenv run python konnect.py --name user@remotehost --command notification --title maintenance --text updates_available --application package_manager --reference update
 ```
 - Unpair device
 ```bash
+# Rest API
+$ curl -s -X DELETE http://localhost:8080/device/name/user@remotehost
 # CLI
 $ pipenv run python konnect.py --name user@remotehost --command unpair
-# Rest API
-$ curl -s -X PUT -d '{"pair":false}' http://localhost:8080/device/name/user@remotehost
 ```
 
 ## Daemon usage
@@ -98,13 +98,26 @@ optional arguments:
   --help                This help
 ```
 
+## Rest API
+| Method | Resource | Description | Parameters |
+| - | - | - | - |
+| GET | / | Application info | |
+| GET | /device | List devices | |
+| GET | /device/(id\|name)/:value | Device info | |
+| POST | /device/(id\|name)/:value | Pair | |
+| DELETE | /device/(id\|name)/:value | Unpair | |
+| PUT | /announce | Announce identity | |
+| POST | /ping/(id\|name)/:value | Ping device | |
+| POST | /notification/(id\|name)/:value | Send notification | text, title, application, reference (optional) |
+| DELETE | /notification/(id\|name)/:value/:reference | Cancel notification | |
+
 ## CLI usage
 ```bash
 $ pipenv run python konnect.py --help
 ```
 ```
 usage: konnect.py [--port PORT]
-                  (--devices | --announce | --command {info,pair,unpair,ping,notification} | --help)
+                  (--devices | --announce | --command {info,pair,unpair,ping,notification,cancel} | --help)
                   [--identifier ID | --name NAME] [--text TEXT] [--title TITLE]
                   [--application APP] [--reference REF]
 
@@ -114,7 +127,7 @@ optional arguments:
 arguments:
   --devices             List all devices
   --announce            Search for devices in the network
-  --command {info,pair,unpair,ping,notification}
+  --command {info,pair,unpair,ping,notification,cancel}
   --help                This help
 
 command arguments:
@@ -126,40 +139,32 @@ notification arguments:
   --title TITLE         The title of the notification
   --application APP     The app that generated the notification
   --reference REF       An (optional) unique notification id
+
+cancel arguments:
+  --reference2 REF       Notification id
 ```
 
-## Rest API
-| Method | Resource | Description | Parameters |
-| - | - | - | - |
-| GET | /device | List devices | |
-| GET | /device/(name\|identifier)/:value | Device info | |
-| PUT | /device/(name\|identifier)/:value | Pair/Unpair | pair (boolean) |
-| POST | /identity | Discover devices | |
-| POST | /ping | Ping devices | |
-| POST | /ping/(name\|identifier)/:value | Ping device | |
-| POST | /notification/(name\|identifier)/:value | Send notification | text, title, application, reference (optional) |
-| DELETE | /notification/(name\|identifier)/:value/:reference | Cancel notification | |
-
 ## Compatibility
-Tested on [kdeconnect](https://invent.kde.org/kde/kdeconnect-kde) 1.3.3-1.4.0 and [kdeconnect-android](https://f-droid.org/en/packages/org.kde.kdeconnect_tp/) 1.13.0+ with protocol version 7
+Tested (manually) on [kdeconnect](https://invent.kde.org/kde/kdeconnect-kde) 1.3.3-1.4.0 and [kdeconnect-android](https://f-droid.org/en/packages/org.kde.kdeconnect_tp/) 1.13.0+ with protocol version 7
 
 ## Limitations
-Konnect is only capable of sending notifications and anything other than ping will be ignored, this is by design
+By design Konnect is only capable of sending notifications and anything other than ping will be ignored
 
 ## Troubleshooting
 - Read how to open firewall ports on [KDE Connect's wiki](https://community.kde.org/KDEConnect#Troubleshooting)
 
-## To-do
+## To-do (in no specific order)
 - Icon support
 - PyPI repository
 - Unit testing
-- Improve command line
-- Periodically broadcast identity
-- Connect to devices (instead of just listening)
+- Improve command line tool
+- Periodically announce identity
+- Connect to devices instead of just listening
 - Type hinting
 - Improve logging
 - Better documentation
 - Group notifications?
+- Force recommended encryption?
 
 ## License
 [GPLv2](https://www.gnu.org/licenses/gpl-2.0.html)
