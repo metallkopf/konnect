@@ -137,12 +137,18 @@ class Konnect(LineReceiver):
       self.factory.database.updateDevice(self.identifier, self.name, self.device)
 
       for notification in self.factory.database.showNotifications(self.identifier):
-        reference = notification[0]
-        text = notification[1]
-        title = notification[2]
-        application = notification[3]
+        cancel = int(notification[0])
+        reference = notification[1]
 
-        self.sendNotification(text, title, application, reference)
+        if cancel == 0:
+          text = notification[2]
+          title = notification[3]
+          application = notification[4]
+
+          self.sendNotification(text, title, application, reference)
+        else:
+          self.sendCancel(reference)
+          self.factory.database.dismissNotification(self.identifier, reference)
     else:
       debug("Ignoring unknown request")
 
@@ -200,6 +206,7 @@ class KonnectFactory(Factory):
 
     try:
       self._findClient(identifier).sendPing()
+
       return True
     except AttributeError:
       return False
@@ -226,18 +233,18 @@ class KonnectFactory(Factory):
       return None
 
     try:
-      client = self._findClient(identifier)
-
-      self.database.dismissNotification(identifier, reference)
-      client.sendCancel(reference)
+      self._findClient(identifier).sendCancel(reference)
 
       return True
     except AttributeError:
+      self.database.cancelNotification(identifier, reference)
+
       return False
 
   def requestPair(self, identifier):
     try:
       self._findClient(identifier).requestPair()
+
       return self.isDeviceTrusted(identifier)
     except AttributeError:
       return None
@@ -246,6 +253,7 @@ class KonnectFactory(Factory):
     try:
       trusted = self.isDeviceTrusted(identifier)
       self._findClient(identifier).requestUnpair()
+
       return trusted
     except AttributeError:
       return None
@@ -275,9 +283,9 @@ class Discovery(DatagramProtocol):
 
   def startProtocol(self):
     self.transport.setBroadcastAllowed(True)
-    self.broadcastIdentity()
+    self.announceIdentity()
 
-  def broadcastIdentity(self, address="<broadcast>"):
+  def announceIdentity(self, address="<broadcast>"):
     try:
       info("Broadcasting identity packet")
       debug("SendTo(%s:%d) - %s", address, self.port, self.packet)
@@ -300,4 +308,4 @@ class Discovery(DatagramProtocol):
       debug("Ignoring my own broadcast")
     else:
       debug("Received UDP identity packet from %s, trying reverse connection", addr[0])
-      self.broadcastIdentity(addr[0])
+      self.announceIdentity(addr[0])

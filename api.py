@@ -16,130 +16,152 @@ class API(Resource):
     self.konnect = konnect
     self.discovery = discovery
 
-  def _getDeviceBy(self, key, value):
+  def _getDeviceId(self, key, value):
     for device in self.konnect.getDevices():
       if device[key] == value:
-        return device
+        return device["identifier"]
 
     return None
 
   def render(self, request):
     request.setHeader(b"content-type", b"application/json")
-    self.uri = request.uri.decode()
-    response = super().render(request)
-
-    address = request.getClientAddress()
-    if request.code // 100 == 2:
-      info("%s:%d - %s %s - %d", address.host, address.port, request.method.decode(), self.uri, request.code)
-    else:
-      error("%s:%d - %s %s - %d", address.host, address.port, request.method.decode(), self.uri, request.code)
-
-    return response
-
-  def render_GET(self, request):
-    response = {}
-    code = 200
-
-    if self.uri == "/":
-      response = {"id": self.konnect.identifier, "name": self.konnect.name, "application": "Konnect " + __version__}
-    elif self.uri == "/device":
-      response = self.konnect.getDevices()
-    else:
-      matches = match(r"^\/device\/(?P<key>identifier|name)\/(?P<value>[\w\-.@]+)$", self.uri)
-
-      if matches:
-        device = self._getDeviceBy(matches.group("key"), matches.group("value"))
-
-        if device is None:
-          code = 404
-        else:
-          response = device
-      else:
-        code = 400
-
+    uri = request.uri.decode()
+    method = request.method.decode()
+    response, code = self.process(request, method, uri)
     request.setResponseCode(code)
+    address = request.getClientAddress()
+
+    if code // 100 == 2 or code // 100 == 3:
+      info("%s:%d - %s %s - %d", address.host, address.port, method, uri, code)
+    else:
+      error("%s:%d - %s %s - %d", address.host, address.port, method, uri, code)
+
     return dumps(response).encode()
 
-  def _handlePairing(self, identifier, data):
+  def process(self, request, method, uri):
+    if uri == "/" and method == "GET":
+      return self._handleInfo()
+    elif uri == "/device" and method == "GET":
+      return self._handleDevices()
+    elif uri == "/announce" and method == "PUT":
+      return self._handleAnnounce()
+    else:
+      patterns = [r"^\/(?P<resource>ping|notification|device)\/(?P<key>id|name)\/(?P<value>[\w\-.@]+)$",
+                  r"^\/(?P<resource>notification)\/(?P<key>id|name)\/(?P<value>[\w\-.@]+)\/(?P<reference>.*)$"]
+
+      for pattern in patterns:
+        matches = match(pattern, uri)
+
+        if not matches:
+          continue
+
+        identifier = self._getDeviceId(matches.group("key"), matches.group("value"))
+
+        if matches.group("resource") == "ping" and method == "POST":
+          return self._handlePing(identifier)
+        elif matches.group("resource") == "device":
+          if method == "GET":
+            return self._handleDevice(identifier)
+          elif method == "POST":
+            return self._handlePairing(identifier, True)
+          elif method == "DELETE":
+            return self._handlePairing(identifier, False)
+        elif matches.group("resource") == "notification":
+          if method == "POST":
+            return self._handleNotification(identifier, request.content.read())
+          elif method == "DELETE":
+            return self._handleCancel(identifier, matches.group("reference"))
+
+    return {"success": False, "message": "invalid request"}, 400
+
+  def _handleInfo(self):
+    return {"id": self.konnect.identifier, "name": self.konnect.name, "application": "Konnect " + __version__, "success": True}, 200
+
+  def _handleDevices(self):
+    devices = self.konnect.getDevices()
+    devices["success"] = True
+
+    return devices, 200
+
+  def _handleAnnounce(self):
     response = {"success": False}
-    code = 200
+    code = 500
 
     try:
-      data = loads(data)
-      pair = bool(data["pair"])
-
-      if pair is True:
-        result = self.konnect.requestPair(identifier)
-
-        if result is False:
-          response["success"] = True
-        elif result is True:
-          response["message"] = "already paired"
-        elif result is None:
-          code = 404
-          response["message"] = "device not reachable"
-      else:
-        result = self.konnect.requestUnpair(identifier)
-
-        if result is True:
-          response["success"] = True
-        elif result is False:
-          code = 401
-          response["message"] = "device not paired"
-        elif result is None:
-          code = 404
-          response["message"] = "device not reachable"
-    except IndexError:
-      code = 400
-      response["message"] = "pair not found"
-    except JSONDecodeError:
-      code = 400
-      response["message"] = "unserialization error"
+      self.discovery.broadcastIdentity()
+      response["success"] = True
+      code = 200
+    except Exception:
+      response["message"] = "failed to broadcast identity packet"
 
     return response, code
 
-  def render_PUT(self, request):
-    response = {}
-    code = 200
-
-    matches = match(r"^\/device\/(?P<key>identifier|name)\/(?P<value>[\w\-.@]+)$", self.uri)
-
-    if matches:
-      device = self._getDeviceBy(matches.group("key"), matches.group("value"))
-
-      response, code = self._handlePairing(device["identifier"], request.content.read())
-    else:
-      code = 404
-
-    request.setResponseCode(code)
-    return dumps(response).encode()
-
   def _handlePing(self, identifier):
     response = {"success": False}
-    code = 200
+    code = 500
     result = self.konnect.sendPing(identifier)
 
     if result is True:
       response["success"] = True
+      code = 200
     elif result is False:
-      code = 404
       response["message"] = "device not reachable"
-    elif result is None:
-      code = 401
+      code = 404
+    else:  # if result is None:
       response["message"] = "device not paired"
+      code = 401
+
+    return response, code
+
+  def _handleDevice(self, identifier):
+    for device in self.konnect.getDevices():
+      if device["identifier"] == identifier:
+        device["success"] = True
+        return device, 200
+
+    return {"success": False, "message": "device not reachable"}, 404
+
+  def _handlePairing(self, identifier, pair):
+    response = {"success": False}
+    code = 500
+
+    if pair is True:
+      result = self.konnect.requestPair(identifier)
+
+      if result is False:
+        response["success"] = True
+        code = 200
+      elif result is True:
+        response["message"] = "already paired"
+        code = 304
+      else:  # if result is None:
+        response["message"] = "device not reachable"
+        code = 404
+    else:
+      result = self.konnect.requestUnpair(identifier)
+
+      if result is True:
+        response["success"] = True
+        code = 200
+      elif result is False:
+        response["message"] = "device not paired"
+        code = 401
+      else:  # if result is None:
+        response["message"] = "device not reachable"
+        code = 404
 
     return response, code
 
   def _handleNotification(self, identifier, data):
     response = {"success": False}
-    code = 200
+    code = 500
 
     try:
       data = loads(data)
 
       if "text" not in data or "title" not in data or "application" not in data:
-        code = 400
         response["message"] = "text or title or application not found"
+        code = 400
       else:
         text = data["text"]
         title = data["title"]
@@ -150,86 +172,33 @@ class API(Resource):
 
         if result is True:
           response["success"] = True
+          code = 200
         elif result is False:
-          code = 404
           response["message"] = "device not reachable"
-        elif result is None:
-          code = 401
+          code = 404
+        else:  # if result is None:
           response["message"] = "device not paired"
+          code = 401
     except JSONDecodeError:
-      code = 400
       response["message"] = "unserialization error"
+      code = 400
 
     return response, code
 
-  def render_DELETE(self, request):
+  def _handleCancel(self, identifier, reference):
     response = {"success": False}
-    code = 200
+    code = 500
 
-    matches = match(r"^\/notification\/(?P<key>identifier|name)\/(?P<value>[\w\-.@]+)\/(?P<reference>.*)$", self.uri)
+    result = self.konnect.sendCancel(identifier, reference)
 
-    if matches:
-      device = self._getDeviceBy(matches.group("key"), matches.group("value"))
-      reference = matches.group("reference")
-      result = self.konnect.sendCancel(device["identifier"], reference)
+    if result is True:
+      response["success"] = True
+      code = 200
+    elif result is False:
+      response["message"] = "device not reachable"
+      code = 404
+    else:  # if result is None:
+      response["message"] = "device not paired"
+      code = 401
 
-      if result is True:
-        response["success"] = True
-      elif result is False:
-        code = 404
-        response["message"] = "device not reachable"
-      elif result is None:
-        code = 401
-        response["message"] = "device not paired"
-    else:
-      code = 400
-
-    request.setResponseCode(code)
-    return dumps(response).encode()
-
-  def render_POST(self, request):
-    response = {"success": False}
-    code = 200
-
-    if self.uri == "/identity":
-      response = {"success": self.discovery.broadcastIdentity()}
-    elif self.uri == "/ping":
-      response["success"] = None
-
-      for device in self.konnect.getDevices():
-        identifier = device["identifier"]
-
-        if device["reachable"] is True and device["trusted"] is True:
-          response[identifier], _ = self._handlePing(identifier)
-    elif self.uri == "/notification":
-      response["success"] = None
-
-      try:
-        data = request.content.read()
-        loads(data)
-
-        for device in self.konnect.getDevices():
-          identifier = device["identifier"]
-
-          if device["trusted"] is True:
-            response[identifier], _ = self._handleNotification(identifier, data)
-      except JSONDecodeError:
-        code = 400
-        response["message"] = "unserialization error"
-    else:
-      matches = match(r"^\/(?P<resource>ping|notification)\/(?P<key>identifier|name)\/(?P<value>[\w\-.@]+)$", self.uri)
-
-      if matches:
-        device = self._getDeviceBy(matches.group("key"), matches.group("value"))
-
-        if matches.group("resource") == "ping":
-          response, code = self._handlePing(device["identifier"])
-        elif matches.group("resource") == "notification":
-          response, code = self._handleNotification(device["identifier"], request.content.read())
-        else:
-          code = 404
-      else:
-        code = 400
-
-    request.setResponseCode(code)
-    return dumps(response).encode()
+    return response, code

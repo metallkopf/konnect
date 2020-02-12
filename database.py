@@ -12,6 +12,9 @@ class Database:
       "FOREIGN KEY (identifier) REFERENCES trusted_devices (identifier) ON DELETE CASCADE)",
       "CREATE INDEX notification_identifier ON notifications (identifier)",
      ],
+    [
+      "ALTER TABLE notifications ADD COLUMN cancel INTEGER DEFAULT 0"
+    ]
   ]
 
   def __init__(self, path):
@@ -70,6 +73,10 @@ class Database:
     query = "DELETE FROM notifications WHERE identifier = ? AND reference = ?"
     self.instance.execute(query, (identifier, reference))
 
+  def cancelNotification(self, identifier, reference):
+    query = "UPDATE notifications SET cancel = ? WHERE identifier = ? AND reference = ?"
+    self.instance.execute(query, (1, identifier, reference))
+
   def showNotifications(self, identifier):
-    query = "SELECT reference, [text], title, application FROM notifications WHERE identifier = ?"
+    query = "SELECT cancel, reference, [text], title, application FROM notifications WHERE identifier = ?"
     return self.instance.execute(query, (identifier,)).fetchall()
