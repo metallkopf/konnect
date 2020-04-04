@@ -32,9 +32,9 @@ class API(Resource):
     address = request.getClientAddress()
 
     if code // 100 == 2 or code // 100 == 3:
-      info("%s:%d - %s %s - %d", address.host, address.port, method, uri, code)
+      info(f"{address.host}:{address.port} - {method} {uri} - {code}")
     else:
-      error("%s:%d - %s %s - %d", address.host, address.port, method, uri, code)
+      error(f"{address.host}:{address.port} - {method} {uri} - {code}")
 
     return dumps(response).encode()
 

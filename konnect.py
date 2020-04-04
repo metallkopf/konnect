@@ -48,7 +48,7 @@ if __name__ == "__main__":
     exit()
 
   method = None
-  url = "http://localhost:%d" % args.port
+  url = f"http://localhost:{args.port}"
   data = {}
 
   if args.devices:
@@ -92,4 +92,4 @@ if __name__ == "__main__":
       print("- {name}: {identifier} (Trusted:{trusted} Reachable:{reachable})".format(**device))
   elif args.command is not None:
     for key, value in data.items():
-      print("%s: %s" % (key.title(), str(value)))
+      print(f"{key.title()}: {value}")

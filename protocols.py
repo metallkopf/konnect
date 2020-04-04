@@ -31,11 +31,11 @@ class Konnect(LineReceiver):
     self.address = "{}:{}".format(peer.host, peer.port)
 
   def connectionLost(self, reason):
-    info("Device %s disconnected", self.name)
+    info(f"Device {self.name} disconnected")
     self.factory.clients.remove(self)
 
   def _sendPacket(self, data):
-    debug("SendTo(%s) - %s", self.address, data)
+    debug(f"SendTo({self.address}) - {data}")
     self.sendLine(bytes(data))
 
   def sendPing(self):
@@ -86,11 +86,11 @@ class Konnect(LineReceiver):
       info("Socket succesfully established an SSL connection")
 
       if self.isTrusted():
-        info("It is a known device %s", self.name)
+        info(f"It is a known device {self.name}")
       else:
-        info("It is a new device %s", self.name)
+        info(f"It is a new device {self.name}")
     else:
-      info("%s uses an old protocol version, this won't work", self.name)
+      info(f"{self.name} uses an old protocol version, this won't work")
       self.transport.abortConnection()
 
   def _handlePairing(self, packet):
@@ -130,7 +130,7 @@ class Konnect(LineReceiver):
   def _handleNotify(self, packet):
     if packet.get("cancel") is not None:
       reference = packet.get("cancel")
-      debug("Dismiss notification request for %s", reference)
+      debug(f"Dismiss notification request for {reference}")
       self.factory.database.dismissNotification(self.identifier, reference)
     elif packet.get("request") is True:
       info("Registered notifications listener")
@@ -155,9 +155,9 @@ class Konnect(LineReceiver):
   def lineReceived(self, line):
     try:
       packet = Packet.load(line)
-      debug("RecvFrom(%s) - %s", self.address, packet)
+      debug(f"RecvFrom(self.address) - {packet}")
     except JSONDecodeError as e:
-      error("Unserialization error: %s", line)
+      error(f"Unserialization error: {line}")
       exception(e)
       return
 
@@ -165,7 +165,7 @@ class Konnect(LineReceiver):
       if packet.isType(PacketType.IDENTITY):
         self._handleIdentity(packet)
       else:
-        warning("Device %s not identified, ignoring non encrypted packet %s", self.name, packet.getType())
+        warning(f"Device {self.name} not identified, ignoring non encrypted packet {packet.getType()}")
     else:
       if packet.isType(PacketType.PAIR):
         self._handlePairing(packet)
@@ -175,9 +175,9 @@ class Konnect(LineReceiver):
         elif packet.isType(PacketType.PING):
           self.sendPing()
         else:
-          warning("Discarding unsupported packet %s for %s", packet.getType(), self.name)
+          warning(f"Discarding unsupported packet {packet.getType()} for {self.name}")
       else:
-        warning("Device %s not paired, ignoring packet %s", self.name, packet.getType())
+        warning(f"Device {self.name} not paired, ignoring packet {packet.getType()}")
         self.status = InternalStatus.NOT_PAIRED
         pair = Packet.createPair(False)
         self._sendPacket(pair)
@@ -288,7 +288,7 @@ class Discovery(DatagramProtocol):
   def announceIdentity(self, address="<broadcast>"):
     try:
       info("Broadcasting identity packet")
-      debug("SendTo(%s:%d) - %s", address, self.port, self.packet)
+      debug(f"SendTo({address}:{self.port}) - {self.packet}")
       self.transport.write(bytes(self.packet), (address, self.port))
     except OSError:
       warning("Failed to broadcast identity packet")
@@ -296,16 +296,16 @@ class Discovery(DatagramProtocol):
   def datagramReceived(self, datagram, addr):
     try:
       packet = Packet.load(datagram)
-      debug("RecvFrom(%s:%d) - %s", addr[0], addr[1], packet)
+      debug(f"RecvFrom({addr[0]}:{addr[1]}) - {packet}")
     except JSONDecodeError as e:
-      error("Unserialization error: %s", datagram)
+      error(f"Unserialization error: {datagram}")
       exception(e)
       return
 
     if not packet.isType(PacketType.IDENTITY):
-      info("Received a UDP packet of wrong type %s", packet.getType())
+      info(f"Received a UDP packet of wrong type {packet.getType()}")
     elif packet.get("deviceId") == self.identifier:
       debug("Ignoring my own broadcast")
     else:
-      debug("Received UDP identity packet from %s, trying reverse connection", addr[0])
+      debug(f"Received UDP identity packet from {addr[0]}, trying reverse connection")
       self.announceIdentity(addr[0])

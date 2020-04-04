@@ -72,7 +72,7 @@ class Packet:
     packet.set("title", title)
     packet.set("text", text)
     packet.set("isClearable", True)
-    packet.set("ticker", "%s: %s" % (title, text))
+    packet.set(f"ticker", "{title}: {text}")
 
     return packet
 
