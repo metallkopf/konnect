@@ -5,7 +5,7 @@ from re import match
 
 from twisted.web.resource import Resource
 
-from version import __version__
+from konnect import __version__
 
 
 class API(Resource):
@@ -78,10 +78,9 @@ class API(Resource):
     return {"id": self.konnect.identifier, "name": self.konnect.name, "application": "Konnect " + __version__, "success": True}, 200
 
   def _handleDevices(self):
-    devices = self.konnect.getDevices()
-    devices["success"] = True
+    response = {"devices": list(self.konnect.getDevices().values()), "success": True}
 
-    return devices, 200
+    return response, 200
 
   def _handleAnnounce(self):
     response = {"success": False}

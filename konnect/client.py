@@ -6,11 +6,11 @@ from sys import argv, exit
 
 from requests import request
 
-from version import __version__
+from konnect import __version__
 
 
-if __name__ == "__main__":
-  parser = ArgumentParser(add_help=False, allow_abbrev=False)
+def main():
+  parser = ArgumentParser(prog="konnect", add_help=False, allow_abbrev=False)
   parser.add_argument("--port", default=8080, type=int, help="Port running the admin interface")
 
   root = parser.add_argument_group("arguments")
@@ -36,7 +36,7 @@ if __name__ == "__main__":
 
   is_cancel = is_command and "cancel" in argv
   dismiss = parser.add_argument_group("cancel arguments")
-  dismiss.add_argument("--reference2", metavar="REF2", help="Notification id")
+  dismiss.add_argument("--reference2", metavar="REF2", help="Notification id", required=is_cancel)
 
   args = parser.parse_args()
 
@@ -44,7 +44,7 @@ if __name__ == "__main__":
     parser.print_help()
     exit()
   elif args.version:
-    print("Konnect " + __version__)
+    print(f"Konnect {__version__}")
     exit()
 
   method = None
@@ -88,8 +88,12 @@ if __name__ == "__main__":
     print("An error ocurred!")
 
   if args.devices:
-    for device in data:
+    for device in data["devices"]:
       print("- {name}: {identifier} (Trusted:{trusted} Reachable:{reachable})".format(**device))
   elif args.command is not None:
     for key, value in data.items():
       print(f"{key.title()}: {value}")
+
+
+if __name__ == "__main__":
+  main()

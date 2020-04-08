@@ -7,7 +7,7 @@ from twisted.internet.reactor import callLater
 from twisted.internet.ssl import Certificate
 from twisted.protocols.basic import LineReceiver
 
-from packet import Packet, PacketType
+from konnect.packet import Packet, PacketType
 
 
 class InternalStatus:
@@ -271,7 +271,7 @@ class KonnectFactory(Factory):
       trusted = client.identifier in devices
       devices[client.identifier] = {"identifier": client.identifier, "name": client.name, "type": client.device, "reachable": True, "trusted": trusted}
 
-    return list(devices.values())
+    return devices
 
 
 class Discovery(DatagramProtocol):

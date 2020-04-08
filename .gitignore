@@ -1,4 +1,4 @@
-*.pem
-konnect.db
 Pipfile.lock
-test.py
+dist/
+konnect.egg-info/
+build/
