@@ -12,7 +12,7 @@ Konnect is based on the [KDE Connect](https://community.kde.org/KDEConnect) prot
 pipenv install git+https://github.com/metallkopf/konnect.git@master#egg=konnect
 
 # Wheels
-pipenv install https://github.com/metallkopf/konnect/releases/download/0.1.0/konnect-0.1.0-py3-none-any.whl
+pipenv install https://github.com/metallkopf/konnect/releases/download/0.1.1/konnect-0.1.1-py3-none-any.whl
 ```
 
 ## Test run
