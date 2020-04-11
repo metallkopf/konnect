@@ -17,7 +17,7 @@ class API(Resource):
     self.discovery = discovery
 
   def _getDeviceId(self, key, value):
-    for device in self.konnect.getDevices():
+    for device in self.konnect.getDevices().values():
       if device[key] == value:
         return device["identifier"]
 
@@ -113,7 +113,7 @@ class API(Resource):
     return response, code
 
   def _handleDevice(self, identifier):
-    for device in self.konnect.getDevices():
+    for device in self.konnect.getDevices().values():
       if device["identifier"] == identifier:
         device["success"] = True
         return device, 200
