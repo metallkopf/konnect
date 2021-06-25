@@ -9,7 +9,7 @@ class PacketType:
   NOTIFICATION = "kdeconnect.notification"
   REQUEST = "kdeconnect.notification.request"
   PING = "kdeconnect.ping"
-
+  RING = "kdeconnect.findmyphone.request"
 
 class Packet:
   PROTOCOL_VERSION = 7
@@ -53,7 +53,7 @@ class Packet:
     packet.set("deviceType", Packet.DEVICE_TYPE)
     packet.set("tcpPort", port)
     packet.set("incomingCapabilities", [PacketType.PING])
-    packet.set("outgoingCapabilities", [PacketType.NOTIFICATION, PacketType.PING])
+    packet.set("outgoingCapabilities", [PacketType.RING,PacketType.NOTIFICATION, PacketType.PING])
 
     return packet
 
@@ -87,6 +87,10 @@ class Packet:
   @staticmethod
   def createPing():
     return Packet(PacketType.PING)
+
+  @staticmethod
+  def createRing():
+    return Packet(PacketType.RING)
 
   @staticmethod
   def load(data):

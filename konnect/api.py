@@ -46,7 +46,7 @@ class API(Resource):
     elif uri == "/announce" and method == "PUT":
       return self._handleAnnounce()
     else:
-      patterns = [r"^\/(?P<resource>ping|notification|device)\/(?P<key>id|name)\/(?P<value>[\w\-.@]+)$",
+      patterns = [r"^\/(?P<resource>ring|ping|notification|device)\/(?P<key>id|name)\/(?P<value>[\w\-.@]+)$",
                   r"^\/(?P<resource>notification)\/(?P<key>id|name)\/(?P<value>[\w\-.@]+)\/(?P<reference>.*)$"]
 
       for pattern in patterns:
@@ -59,6 +59,8 @@ class API(Resource):
 
         if matches.group("resource") == "ping" and method == "POST":
           return self._handlePing(identifier)
+        elif matches.group("resource") == "ring" and method == "POST":
+          return self._handleRing(identifier)
         elif matches.group("resource") == "device":
           if method == "GET":
             return self._handleDevice(identifier)
@@ -92,6 +94,23 @@ class API(Resource):
       code = 200
     except Exception:
       response["message"] = "failed to broadcast identity packet"
+
+    return response, code
+
+  def _handleRing(self, identifier):
+    response = {"success": False}
+    code = 500
+    result = self.konnect.sendRing(identifier)
+
+    if result is True:
+      response["success"] = True
+      code = 200
+    elif result is False:
+      response["message"] = "device not reachable"
+      code = 404
+    else:  # if result is None:
+      response["message"] = "device not paired"
+      code = 401
 
     return response, code
 

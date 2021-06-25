@@ -8,7 +8,7 @@ User=user
 Restart=always
 Type=simple
 WorkingDirectory=/home/user/konnect
-ExecStart=/usr/bin/pipenv run konnectd --receiver --service
+ExecStart=/usr/bin/pipenv run konnectd --receiver --service --name NAS
 
 [Install]
 WantedBy=multi-user.target
