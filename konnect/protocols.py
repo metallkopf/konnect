@@ -38,6 +38,10 @@ class Konnect(LineReceiver):
     debug(f"SendTo({self.address}) - {data}")
     self.sendLine(bytes(data))
 
+  def sendRing(self):
+    ring = Packet.createRing()
+    self._sendPacket(ring)
+
   def sendPing(self):
     ping = Packet.createPing()
     self._sendPacket(ping)
@@ -199,6 +203,17 @@ class KonnectFactory(Factory):
         return client
 
     return None
+
+  def sendRing(self, identifier):
+    if not self.isDeviceTrusted(identifier):
+      return None
+
+    try:
+      self._findClient(identifier).sendRing()
+
+      return True
+    except AttributeError:
+      return False
 
   def sendPing(self, identifier):
     if not self.isDeviceTrusted(identifier):
