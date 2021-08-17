@@ -11,6 +11,7 @@ class PacketType:
   PING = "kdeconnect.ping"
   RING = "kdeconnect.findmyphone.request"
 
+
 class Packet:
   PROTOCOL_VERSION = 7
   DEVICE_TYPE = "desktop"
@@ -53,7 +54,7 @@ class Packet:
     packet.set("deviceType", Packet.DEVICE_TYPE)
     packet.set("tcpPort", port)
     packet.set("incomingCapabilities", [PacketType.PING])
-    packet.set("outgoingCapabilities", [PacketType.RING,PacketType.NOTIFICATION, PacketType.PING])
+    packet.set("outgoingCapabilities", [PacketType.RING, PacketType.NOTIFICATION, PacketType.PING])
 
     return packet
 
@@ -72,7 +73,7 @@ class Packet:
     packet.set("title", title)
     packet.set("text", text)
     packet.set("isClearable", True)
-    packet.set(f"ticker", "{title}: {text}")
+    packet.set("ticker", f"{title}: {text}")
 
     return packet
 

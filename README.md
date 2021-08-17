@@ -106,6 +106,7 @@ optional arguments:
 | DELETE | /device/(id\|name)/:value | Unpair | |
 | PUT | /announce | Announce identity | |
 | POST | /ping/(id\|name)/:value | Ping device | |
+| POST | /ring/(id\|name)/:value | Ring device | |
 | POST | /notification/(id\|name)/:value | Send notification | text, title, application, reference (optional) |
 | DELETE | /notification/(id\|name)/:value/:reference | Cancel notification | |
 
@@ -115,7 +116,7 @@ konnect --help
 ```
 ```
 usage: konnect.py [--port PORT]
-                  (--devices | --announce | --command {info,pair,unpair,ping,notification,cancel} | --help)
+                  (--devices | --announce | --command {info,pair,unpair,ping,ring,notification,cancel} | --help)
                   [--identifier ID | --name NAME] [--text TEXT] [--title TITLE]
                   [--application APP] [--reference REF] [--reference2 REF2]
 
@@ -125,7 +126,7 @@ optional arguments:
 arguments:
   --devices             List all devices
   --announce            Search for devices in the network
-  --command {info,pair,unpair,ping,notification,cancel}
+  --command {info,pair,unpair,ping,ring,notification,cancel}
   --help                This help
 
 command arguments:
@@ -191,6 +192,9 @@ Tested *manually* on [kdeconnect](https://invent.kde.org/kde/kdeconnect-kde) 1.3
 - Force recommended encryption?
 - Run commands?
 - Standardize rest resources?
+
+## Contributor(s)
+- coxtor
 
 ## License
 [GPLv2](https://www.gnu.org/licenses/gpl-2.0.html)

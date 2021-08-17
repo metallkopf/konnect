@@ -17,7 +17,7 @@ def main():
   main = root.add_mutually_exclusive_group(required=True)
   main.add_argument("--devices", action="store_true", help="List all devices")
   main.add_argument("--announce", action="store_true", help="Search for devices in the network")
-  main.add_argument("--command", choices=["info", "pair", "unpair","ring", "ping", "notification", "cancel"])
+  main.add_argument("--command", choices=["info", "pair", "unpair", "ring", "ping", "notification", "cancel"])
   main.add_argument("--help", action="store_true", help="This help")
   main.add_argument("--version", action="store_true", help="Version information")
 
