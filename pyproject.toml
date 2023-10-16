@@ -1,0 +1,50 @@
+[build-system]
+requires = ["setuptools>=61.0.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "konnect"
+authors = [{name = "metallkopf"}]
+description = "Headless KDE Connect"
+requires-python = ">=3.7"
+keywords = ["headless", "kdeconnect", "kde-connect", "server"]
+license = {text = "GPL-2.0-only"}
+readme = {file = "README.md", content-type = "text/markdown"}
+dynamic = ["version"]
+urls = {Source = "https://github.com/metallkopf/konnect"}
+dependencies = [
+  "cryptography",
+  "pyopenssl",
+  "requests",
+  "service-identity",
+  "twisted"
+]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Environment :: Console",
+  "Environment :: No Input/Output (Daemon)",
+  "Intended Audience :: Developers",
+  "Intended Audience :: System Administrators",
+  "License :: OSI Approved :: GNU General Public License v2 (GPLv2)",
+  "Natural Language :: English",
+  "Operating System :: POSIX :: Linux",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Topic :: Desktop Environment :: K Desktop Environment (KDE)",
+  "Topic :: Internet",
+  "Topic :: Utilities",
+]
+
+[project.optional-dependencies]
+devel = ["build", "flake8", "isort", "twine"]
+systemd = ["systemd-python"]
+
+[project.scripts]
+konnect = "konnect.client:main"
+konnectd = "konnect.server:main"
+
+[tool.setuptools]
+packages = ["konnect"]
+
+[tool.setuptools.dynamic]
+version = {attr = "konnect.__version__"}

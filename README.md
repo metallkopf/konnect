@@ -3,28 +3,30 @@ Konnect is based on the [KDE Connect](https://community.kde.org/KDEConnect) prot
 
 ## Prerequisites
 - Python 3.7+
-- Systemd
-- Pipenv (or similar)
+- Systemd (optional)
 
 ## Installation
 ```bash
-# From source
-pipenv install git+https://github.com/metallkopf/konnect.git@master#egg=konnect
+# Create virtualenv
+python3 -m venv venv
 
-# Wheels
-pipenv install https://github.com/metallkopf/konnect/releases/download/0.1.1/konnect-0.1.1-py3-none-any.whl
+# Wheels for systemd
+venv/bin/pip install "konnect[systemd] @ https://github.com/metallkopf/konnect/releases/download/0.1.3/konnect-0.1.3-py3-none-any.whl"
+
+# Wheels for generic init
+venv/bin/pip install https://github.com/metallkopf/konnect/releases/download/0.1.3/konnect-0.1.3-py3-none-any.whl
+
+# From source
+venv/bin/pip install git+https://github.com/metallkopf/konnect.git@master#egg=konnect
 ```
 
 ## Test run
 ```bash
-pipenv shell
-```
-```bash
 # With KDE Connect installed
-konnectd --name Test --admin-port 8080
+venv/bin/konnectd --name Test --admin-port 8080
 
 # Without KDE Connect installed
-konnectd --name Test --receiver --admin-port 8080
+venv/bin/konnectd --name Test --receiver --admin-port 8080
 ```
 
 ## Examples
@@ -34,7 +36,7 @@ konnectd --name Test --receiver --admin-port 8080
 curl -s -X GET http://localhost:8080/device
 
 # CLI
-konnect --devices
+venv/bin/konnect --devices
 
 - user@remotehost: 00112233_4455_6677_8899-aabbccddeeff (Trusted:False Reachable:True)
 - smartphone: abcdef0123456789 (Trusted:False Reachable:True)
@@ -45,7 +47,7 @@ konnect --devices
 curl -s -X POST http://localhost:8080/device/name/user@remotehost
 
 # CLI
-konnect --name user@remotehost --command pair
+venv/bin/konnect --name user@remotehost --command pair
 ```
 - Accept pairing request on remote host
 - Check successful pairing by sending ping
@@ -54,7 +56,7 @@ konnect --name user@remotehost --command pair
 curl -s -X POST http://localhost:8080/ping/name/user@remotehost
 
 # CLI
-konnect --name user@remotehost --command ping
+venv/bin/konnect --name user@remotehost --command ping
 ```
 - Send notification
 ```bash
@@ -62,7 +64,7 @@ konnect --name user@remotehost --command ping
 curl -s -X POST -d '{"application":"Package Manager","title":"Maintenance","text":"There are updates available!","reference":"update"}' http://localhost:8080/notification/name/user@remotehost
 
 # CLI
-konnect --name user@remotehost --command notification --title maintenance --text updates_available --application package_manager --reference update
+venv/bin/konnect --name user@remotehost --command notification --title maintenance --text updates_available --application package_manager --reference update
 ```
 - Unpair device
 ```bash
@@ -70,12 +72,12 @@ konnect --name user@remotehost --command notification --title maintenance --text
 curl -s -X DELETE http://localhost:8080/device/name/user@remotehost
 
 # CLI
-konnect --name user@remotehost --command unpair
+venv/bin/konnect --name user@remotehost --command unpair
 ```
 
 ## Daemon usage
 ```bash
-konnectd --help
+venv/bin/konnectd --help
 ```
 ```
 usage: konnectd [--name NAME] [--verbose] [--discovery-port DISCOVERY_PORT]
@@ -112,7 +114,7 @@ optional arguments:
 
 ## CLI usage
 ```bash
-konnect --help
+venv/bin/konnect --help
 ```
 ```
 usage: konnect.py [--port PORT]
@@ -156,7 +158,7 @@ User=user
 Restart=always
 Type=simple
 WorkingDirectory=/home/user/konnect
-ExecStart=/usr/bin/pipenv run konnectd --receiver --service
+ExecStart=/home/user/konnect/venv/bin/konnectd --receiver --service
 
 [Install]
 WantedBy=multi-user.target
@@ -176,7 +178,11 @@ sudo systemctl enable konnect
 Tested *manually* on [kdeconnect](https://invent.kde.org/kde/kdeconnect-kde) 1.3.3+ and [kdeconnect-android](https://f-droid.org/en/packages/org.kde.kdeconnect_tp/) 1.13.0+
 
 ## Troubleshooting
-- Read how to open firewall ports on [KDE Connect's wiki](https://community.kde.org/KDEConnect#Troubleshooting)
+### Read how to open firewall ports on
+- [KDE Connect's wiki](https://community.kde.org/KDEConnect#Troubleshooting)
+### Installation errors (required OS packages)
+- Debian-based: `sudo apt-get install libsystemd-dev pkg-config python3-venv`
+- RedHat-like: `sudo dnf install gcc pkg-config python3-devel systemd-devel`
 
 ## To-do (in no particular order)
 - Icon support
@@ -195,6 +201,13 @@ Tested *manually* on [kdeconnect](https://invent.kde.org/kde/kdeconnect-kde) 1.3
 
 ## Contributor(s)
 - coxtor
+
+## Releasing
+```bash
+venv/bin/python -m build --wheel
+
+venv/bin/twine check dist/*
+```
 
 ## License
 [GPLv2](https://www.gnu.org/licenses/gpl-2.0.html)

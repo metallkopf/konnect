@@ -1,9 +1,10 @@
-Pipfile.lock
-dist/
-*.egg-info/
-build/
-*/__pycache__/
-*.pem
 *.db
 *.diff
+*.egg-info/
 *.log
+*.pem
+test.py
+*/__pycache__/
+build/
+dist/
+venv/

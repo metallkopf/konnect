@@ -28,7 +28,7 @@ class Konnect(LineReceiver):
     self.transport.setTcpKeepAlive(1)
     self.factory.clients.add(self)
     peer = self.transport.getPeer()
-    self.address = "{}:{}".format(peer.host, peer.port)
+    self.address = f"{peer.host}:{peer.port}"
 
   def connectionLost(self, reason):
     info(f"Device {self.name} disconnected")

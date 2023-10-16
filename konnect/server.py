@@ -10,7 +10,6 @@ from sys import exit
 from uuid import uuid4
 
 from OpenSSL.crypto import Error
-from systemd.journal import JournalHandler
 from twisted.internet import reactor
 from twisted.web.server import Site
 
@@ -46,8 +45,13 @@ def main():
   level = DEBUG if args.verbose else INFO
 
   if args.service is True:
-    handler = JournalHandler(SYSLOG_IDENTIFIER="konnectd")
-    basicConfig(format="%(levelname)s %(message)s", level=level, handlers=[handler])
+    try:
+      from systemd.journal import JournalHandler
+      handler = JournalHandler(SYSLOG_IDENTIFIER="konnectd")
+      basicConfig(format="%(levelname)s %(message)s", level=level, handlers=[handler])
+    except ImportError:
+      print("systemd-python is not installed")
+      exit(1)
   else:
     basicConfig(format="%(asctime)s %(levelname)s %(message)s", level=level)
 

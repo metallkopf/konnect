@@ -1,4 +1,0 @@
-include .flake8
-include .isort.cfg
-include Pipfile
-include konnect.service
