@@ -12,6 +12,7 @@ from konnect import __version__
 def main():
   parser = ArgumentParser(prog="konnect", add_help=False, allow_abbrev=False)
   parser.add_argument("--port", default=8080, type=int, help="Port running the admin interface")
+  parser.add_argument("--debug", action="store_true", default=False, help="Show debug messages")
 
   root = parser.add_argument_group("arguments")
   main = root.add_mutually_exclusive_group(required=True)
@@ -84,7 +85,16 @@ def main():
       method = "DELETE"
       url = join(url, "notification", key, value, args.reference2)
 
+  if args.debug:
+    print("REQUEST:", method, url)
+    print("", data)
+
   response = request(method, url, json=data)
+
+  if args.debug:
+    print("RESPONSE:", response.status_code, response.headers.get("content-type"))
+    print("", response.text)
+
   data = response.json()
 
   if response.status_code != 200:
@@ -92,7 +102,7 @@ def main():
 
   if args.devices:
     for device in data["devices"]:
-      print("- {name}: {identifier} (Trusted:{trusted} Reachable:{reachable})".format(**device))
+      print("- {name}: {identifier} (Trusted: {trusted}, Reachable: {reachable})".format(**device))
   elif args.command is not None:
     for key, value in data.items():
       print(f"{key.title()}: {value}")

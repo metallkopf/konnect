@@ -11,10 +11,10 @@ class Database:
       "title TEXT, application TEXT, PRIMARY KEY (identifier, reference), "
       "FOREIGN KEY (identifier) REFERENCES trusted_devices (identifier) ON DELETE CASCADE)",
       "CREATE INDEX notification_identifier ON notifications (identifier)",
-     ],
+    ],
     [
-      "ALTER TABLE notifications ADD COLUMN cancel INTEGER DEFAULT 0"
-    ]
+      "ALTER TABLE notifications ADD COLUMN cancel INTEGER DEFAULT 0",
+    ],
   ]
 
   def __init__(self, path):

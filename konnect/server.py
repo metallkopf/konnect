@@ -47,6 +47,7 @@ def main():
   if args.service is True:
     try:
       from systemd.journal import JournalHandler
+
       handler = JournalHandler(SYSLOG_IDENTIFIER="konnectd")
       basicConfig(format="%(levelname)s %(message)s", level=level, handlers=[handler])
     except ImportError:

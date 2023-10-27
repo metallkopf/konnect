@@ -46,8 +46,10 @@ class API(Resource):
     elif uri == "/announce" and method == "PUT":
       return self._handleAnnounce()
     else:
-      patterns = [r"^\/(?P<resource>ring|ping|notification|device)\/(?P<key>id|name)\/(?P<value>[\w\-.@]+)$",
-                  r"^\/(?P<resource>notification)\/(?P<key>id|name)\/(?P<value>[\w\-.@]+)\/(?P<reference>.*)$"]
+      patterns = [
+        r"^\/(?P<resource>ring|ping|notification|device)\/(?P<key>identifier|name)\/(?P<value>[\w\-.@]+)$",
+        r"^\/(?P<resource>notification)\/(?P<key>identifier|name)\/(?P<value>[\w\-.@]+)\/(?P<reference>.*)$",
+      ]
 
       for pattern in patterns:
         matches = match(pattern, uri)
