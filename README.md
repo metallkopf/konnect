@@ -103,14 +103,14 @@ optional arguments:
 | - | - | - | - |
 | GET | / | Application info | |
 | GET | /device | List devices | |
-| GET | /device/(id\|name)/:value | Device info | |
-| POST | /device/(id\|name)/:value | Pair | |
-| DELETE | /device/(id\|name)/:value | Unpair | |
+| GET | /device/(identifier\|name)/:value | Device info | |
+| POST | /device/(identifier\|name)/:value | Pair | |
+| DELETE | /device/(identifier\|name)/:value | Unpair | |
 | PUT | /announce | Announce identity | |
-| POST | /ping/(id\|name)/:value | Ping device | |
-| POST | /ring/(id\|name)/:value | Ring device | |
-| POST | /notification/(id\|name)/:value | Send notification | text, title, application, reference (optional) |
-| DELETE | /notification/(id\|name)/:value/:reference | Cancel notification | |
+| POST | /ping/(identifier\|name)/:value | Ping device | |
+| POST | /ring/(identifier\|name)/:value | Ring device | |
+| POST | /notification/(identifier\|name)/:value | Send notification | text, title, application, reference (optional) |
+| DELETE | /notification/(identifier\|name)/:value/:reference | Cancel notification | |
 
 ## CLI usage
 ```bash
