@@ -11,10 +11,10 @@ Konnect is based on the [KDE Connect](https://community.kde.org/KDEConnect) prot
 python3 -m venv venv
 
 # Wheels for systemd
-venv/bin/pip install "konnect[systemd] @ https://github.com/metallkopf/konnect/releases/download/0.1.3/konnect-0.1.3-py3-none-any.whl"
+venv/bin/pip install "konnect[systemd] @ https://github.com/metallkopf/konnect/releases/download/0.1.4/konnect-0.1.4-py3-none-any.whl"
 
 # Wheels for generic init
-venv/bin/pip install https://github.com/metallkopf/konnect/releases/download/0.1.3/konnect-0.1.3-py3-none-any.whl
+venv/bin/pip install https://github.com/metallkopf/konnect/releases/download/0.1.4/konnect-0.1.4-py3-none-any.whl
 
 # From source
 venv/bin/pip install git+https://github.com/metallkopf/konnect.git@master#egg=konnect
@@ -38,8 +38,8 @@ curl -s -X GET http://localhost:8080/device
 # CLI
 venv/bin/konnect --devices
 
-- user@remotehost: 00112233_4455_6677_8899-aabbccddeeff (Trusted:False Reachable:True)
-- smartphone: abcdef0123456789 (Trusted:False Reachable:True)
+- user@remotehost: 00112233_4455_6677_8899-aabbccddeeff (Trusted: False, Reachable: True)
+- smartphone: abcdef0123456789 (Trusted: False, Reachable: True)
 ```
 - Pair with device
 ```bash
@@ -80,22 +80,25 @@ venv/bin/konnect --name user@remotehost --command unpair
 venv/bin/konnectd --help
 ```
 ```
-usage: konnectd [--name NAME] [--verbose] [--discovery-port DISCOVERY_PORT]
-                [--service-port SERVICE_PORT] [--admin-port ADMIN_PORT]
-                [--config-dir CONFIG_DIR] [--receiver] [--service] [--help]
-                [--version]
+usage: konnectd [--name NAME] [--verbose] [--discovery-port PORT] [--service-port PORT] [--transfer-port PORT]
+                [--max-transfer-ports NUM] [--admin-port PORT] [--config-dir DIR] [--receiver] [--service]
+                [--help] [--version]
 
-optional arguments:
+options:
   --name NAME           Device name (default: localhost)
   --verbose             Show debug messages (default: False)
-  --discovery-port DISCOVERY_PORT Protocol discovery port (default: 1716)
-  --service-port SERVICE_PORT     Protocol service port (default: 1764)
-  --admin-port ADMIN_PORT         Admin Rest API port (default: 8080)
-  --config-dir CONFIG_DIR         Config directory (default: ~/.config/konnect)
-  --receiver                      Listen for new devices (default: False)
-  --service                       Send logs to journald (default: False)
-  --help                          This help (default: False)
-  --version                       Version information (default: False)
+  --discovery-port PORT
+                        Discovery port (default: 1716)
+  --service-port PORT   Service port (default: 1764)
+  --transfer-port PORT  Transfer port (top) (default: 1763)
+  --max-transfer-ports NUM
+                        Total open ports for transfer (default: 3)
+  --admin-port PORT     API port (default: 8080)
+  --config-dir DIR      Config directory (default: ~/.config/konnect)
+  --receiver            Listen for new devices (default: False)
+  --service             Send logs to journald (default: False)
+  --help                This help (default: False)
+  --version             Version information (default: False)
 ```
 
 ## Rest API
@@ -109,7 +112,7 @@ optional arguments:
 | PUT | /announce | Announce identity | |
 | POST | /ping/(identifier\|name)/:value | Ping device | |
 | POST | /ring/(identifier\|name)/:value | Ring device | |
-| POST | /notification/(identifier\|name)/:value | Send notification | text, title, application, reference (optional) |
+| POST | /notification/(identifier\|name)/:value | Send notification | text, title, application, reference (optional), icon (optional) |
 | DELETE | /notification/(identifier\|name)/:value/:reference | Cancel notification | |
 
 ## CLI usage
@@ -117,19 +120,21 @@ optional arguments:
 venv/bin/konnect --help
 ```
 ```
-usage: konnect.py [--port PORT]
-                  (--devices | --announce | --command {info,pair,unpair,ping,ring,notification,cancel} | --help)
-                  [--identifier ID | --name NAME] [--text TEXT] [--title TITLE]
-                  [--application APP] [--reference REF] [--reference2 REF2]
+usage: konnect [--port PORT] [--debug]
+               (--devices | --announce | --command {info,pair,unpair,ring,ping,notification,cancel} | --help | --version)
+               [--identifier ID | --name NAME] [--text TEXT] [--title TITLE] [--application APP] [--reference REF]
+               [--icon ICON] [--reference2 REF2]
 
-optional arguments:
+options:
   --port PORT           Port running the admin interface
+  --debug               Show debug messages
 
 arguments:
   --devices             List all devices
   --announce            Search for devices in the network
-  --command {info,pair,unpair,ping,ring,notification,cancel}
+  --command {info,pair,unpair,ring,ping,notification,cancel}
   --help                This help
+  --version             Version information
 
 command arguments:
   --identifier ID       Device Identifier
@@ -140,9 +145,10 @@ notification arguments:
   --title TITLE         The title of the notification
   --application APP     The app that generated the notification
   --reference REF       An (optional) unique notification id
+  --icon ICON           The icon of the notification (optional)
 
 cancel arguments:
-  --reference2 REF       Notification id
+  --reference2 REF2     Notification id
 ```
 
 ## Run as service
@@ -185,22 +191,27 @@ Tested *manually* on [kdeconnect](https://invent.kde.org/kde/kdeconnect-kde) 1.3
 - RedHat-like: `sudo dnf install gcc pkg-config python3-devel systemd-devel`
 
 ## To-do (in no particular order)
-- Icon support
 - PyPI installable
 - Unit testing
 - Improve command line tool
 - Periodically announce identity
 - Connect to devices instead of just listening
-- Improve logging
 - Better documentation
 - Type hinting?
 - Group notifications?
-- Force recommended encryption?
 - Run commands?
-- Standardize rest resources?
+- MDNS support?
+- Share an receive files?
 
 ## Contributor(s)
 - coxtor
+
+## Code Style
+```bash
+venv/bin/isort --diff konnect/*.py
+
+venv/bin/flake8 konnect/*.py
+```
 
 ## Releasing
 ```bash

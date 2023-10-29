@@ -28,7 +28,7 @@ class Packet:
     return dumps(self.data).encode()
 
   def __repr__(self):
-    return "Packet({{id={d[id]}, type={d[type]}, body={d[body]}}})".format(d=self.data)
+    return f"Packet({self.data})"
 
   def set(self, key, value):
     self.data["body"][key] = value
@@ -66,7 +66,7 @@ class Packet:
     return packet
 
   @staticmethod
-  def createNotification(text, title, application, reference):
+  def createNotification(text, title, application, reference, payload=None):
     packet = Packet(PacketType.NOTIFICATION)
     packet.set("id", reference or str(uuid4()))
     packet.set("appName", application)
@@ -74,6 +74,11 @@ class Packet:
     packet.set("text", text)
     packet.set("isClearable", True)
     packet.set("ticker", f"{title}: {text}")
+
+    if payload:
+      packet.set("payloadHash", payload["digest"])
+      packet.data["payloadSize"] = payload["size"]
+      packet.data["payloadTransferInfo"]["port"] = payload["port"]
 
     return packet
 

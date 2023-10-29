@@ -1,13 +1,25 @@
+from hashlib import md5
+from io import BytesIO
 from json.decoder import JSONDecodeError
 from logging import debug, error, exception, info, warning
+from os import makedirs
+from os.path import basename, getsize, join
+from shutil import move
+from tempfile import gettempdir, mkstemp
 from uuid import uuid4
 
-from twisted.internet.protocol import DatagramProtocol, Factory
+from PIL import Image
+from PIL.Image import Resampling
+from twisted.internet.protocol import DatagramProtocol, Factory, Protocol
 from twisted.internet.reactor import callLater
 from twisted.internet.ssl import Certificate
 from twisted.protocols.basic import LineReceiver
+from twisted.protocols.policies import TimeoutMixin
 
 from konnect.packet import Packet, PacketType
+
+
+MAX_ICON_SIZE = 128
 
 
 class InternalStatus:
@@ -46,8 +58,8 @@ class Konnect(LineReceiver):
     ping = Packet.createPing()
     self._sendPacket(ping)
 
-  def sendNotification(self, text, title, application, reference):
-    notification = Packet.createNotification(text, title, application, reference)
+  def sendNotification(self, text, title, application, reference, payload=None):
+    notification = Packet.createNotification(text, title, application, reference, payload)
     self._sendPacket(notification)
 
   def sendCancel(self, reference):
@@ -159,7 +171,7 @@ class Konnect(LineReceiver):
   def lineReceived(self, line):
     try:
       packet = Packet.load(line)
-      debug(f"RecvFrom(self.address) - {packet}")
+      debug(f"RecvFrom({self.address}) - {packet}")
     except JSONDecodeError as e:
       error(f"Unserialization error: {line}")
       exception(e)
@@ -191,11 +203,15 @@ class KonnectFactory(Factory):
   protocol = Konnect
   clients = set()
 
-  def __init__(self, database, identifier, name, options):
+  def __init__(self, database, identifier, name, options, transfer):
     self.database = database
     self.identifier = identifier
     self.name = name
     self.options = options
+    self.transfer = transfer
+
+    self.temp_dir = join(gettempdir(), "konnect_" + name)
+    makedirs(self.temp_dir, exist_ok=True)
 
   def _findClient(self, identifier):
     for client in self.clients:
@@ -226,7 +242,7 @@ class KonnectFactory(Factory):
     except AttributeError:
       return False
 
-  def sendNotification(self, identifier, text, title, application, reference):
+  def sendNotification(self, identifier, text, title, application, reference, icon=None):
     if not self.isDeviceTrusted(identifier):
       return None
 
@@ -236,8 +252,27 @@ class KonnectFactory(Factory):
       if not isinstance(reference, str) or len(reference) == 0:
         reference = str(uuid4())
 
+      payload = None
+
+      if icon:
+        _, temp = mkstemp()
+
+        with Image.open(BytesIO(icon)) as image:
+          image.thumbnail([MAX_ICON_SIZE] * 2, Resampling.LANCZOS)
+          image.save(temp, "PNG")
+
+        digest = md5(open(temp, "rb").read()).hexdigest()
+        path = join(self.temp_dir, digest)
+        move(temp, path)
+
+        size = getsize(path)
+        port = self.transfer.reservePort(path)
+
+        if port:
+          payload = {"digest": digest, "size": size, "port": port}
+
       self.database.persistNotification(identifier, text, title, application, reference)
-      client.sendNotification(text, title, application, reference)
+      client.sendNotification(text, title, application, reference, payload)
 
       return True
     except AttributeError:
@@ -324,3 +359,59 @@ class Discovery(DatagramProtocol):
     else:
       debug(f"Received UDP identity packet from {addr[0]}, trying reverse connection")
       self.announceIdentity(addr[0])
+
+
+class FileTransfer(Protocol, TimeoutMixin):
+  def connectionMade(self):
+    self.transport.setTcpNoDelay(True)
+    self.transport.setTcpKeepAlive(0)
+    peer = self.transport.getPeer()
+    self.address = f"{peer.host}:{peer.port}"
+    self.port = self.transport.getHost().port
+
+    self.sendFile()
+
+  def sendFile(self):
+    path = self.factory.jobs.get(self.port, "")
+    debug(f"Transfer({self.address}) - File({basename(path)})")
+
+    if not path:
+      self.setTimeout(0)
+      return
+
+    with open(path, "rb") as handle:
+      while True:
+        chunk = handle.read(2048)
+
+        if not chunk:
+          break
+
+        self.transport.write(chunk)
+
+    self.setTimeout(1)
+
+  def timeoutConnection(self):
+    self.transport.abortConnection()
+
+  def connectionLost(self, reason):
+    self.setTimeout(None)
+    self.factory.jobs[self.port] = None
+
+
+class TransferFactory(Factory):
+  protocol = FileTransfer
+  jobs = {}
+
+  def __init__(self, top_port, total):
+    for x in range(total):
+      self.jobs[top_port - x] = None
+
+  def reservePort(self, path):
+    for port, path2 in self.jobs.items():
+      if path2:
+        continue
+
+      self.jobs[port] = path
+      return port
+
+    return None

@@ -1,12 +1,20 @@
 #!/usr/bin/env python3
 
 from argparse import ArgumentParser
+from base64 import b64encode
+from os import unlink
 from os.path import join
 from sys import argv, exit
+from tempfile import mkstemp
 
+from PIL import Image
+from PIL.Image import Resampling
 from requests import request
 
 from konnect import __version__
+
+
+MAX_ICON_SIZE = 128
 
 
 def main():
@@ -34,6 +42,7 @@ def main():
   message.add_argument("--title", help="The title of the notification", required=is_notification)
   message.add_argument("--application", metavar="APP", help="The app that generated the notification", required=is_notification)
   message.add_argument("--reference", metavar="REF", default="", help="An (optional) unique notification id")
+  message.add_argument("--icon", default=None, help="The icon of the notification (optional)")
 
   is_cancel = is_command and "cancel" in argv
   dismiss = parser.add_argument_group("cancel arguments")
@@ -81,6 +90,29 @@ def main():
       method = "POST"
       url = join(url, "notification", key, value)
       data = {"text": args.text, "title": args.title, "application": args.application, "reference": args.reference}
+
+      if args.icon:
+        try:
+          path = args.icon
+
+          with Image.open(args.icon) as image:
+            if image.format != "PNG" or max(image.size) > MAX_ICON_SIZE:
+              _, path = mkstemp()
+              image.thumbnail([MAX_ICON_SIZE] * 2, Resampling.LANCZOS)
+              image.save(path, "PNG")
+
+          with open(path, "rb") as handle:
+            icon = b64encode(handle.read())
+            data["icon"] = icon.decode()
+
+          if args.icon != path:
+            unlink(path)
+        except ValueError:
+          print("Error: unsupported icon format")
+          exit(1)
+        except FileNotFoundError:
+          print("Error: icon not found")
+          exit(1)
     elif args.command == "cancel":
       method = "DELETE"
       url = join(url, "notification", key, value, args.reference2)

@@ -1,3 +1,4 @@
+from base64 import b64decode
 from json import dumps, loads
 from json.decoder import JSONDecodeError
 from logging import error, info
@@ -188,7 +189,12 @@ class API(Resource):
         application = data["application"]
         reference = data.get("reference", "")
 
-        result = self.konnect.sendNotification(identifier, text, title, application, reference)
+        if data.get("icon"):
+          icon = b64decode(data.get("icon"))
+        else:
+          icon = None
+
+        result = self.konnect.sendNotification(identifier, text, title, application, reference, icon)
 
         if result is True:
           response["success"] = True
