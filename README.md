@@ -11,10 +11,10 @@ Konnect is based on the [KDE Connect](https://community.kde.org/KDEConnect) prot
 python3 -m venv venv
 
 # Wheels for systemd
-venv/bin/pip install "konnect[systemd] @ https://github.com/metallkopf/konnect/releases/download/0.1.4/konnect-0.1.4-py3-none-any.whl"
+venv/bin/pip install "konnect[systemd] @ https://github.com/metallkopf/konnect/releases/download/0.1.5/konnect-0.1.5-py3-none-any.whl"
 
 # Wheels for generic init
-venv/bin/pip install https://github.com/metallkopf/konnect/releases/download/0.1.4/konnect-0.1.4-py3-none-any.whl
+venv/bin/pip install https://github.com/metallkopf/konnect/releases/download/0.1.5/konnect-0.1.5-py3-none-any.whl
 
 # From source
 venv/bin/pip install git+https://github.com/metallkopf/konnect.git@master#egg=konnect

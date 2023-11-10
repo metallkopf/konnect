@@ -5,9 +5,9 @@ from uuid import uuid4
 
 class PacketType:
   IDENTITY = "kdeconnect.identity"
-  PAIR = "kdeconnect.pair"
   NOTIFICATION = "kdeconnect.notification"
   REQUEST = "kdeconnect.notification.request"
+  PAIR = "kdeconnect.pair"
   PING = "kdeconnect.ping"
   RING = "kdeconnect.findmyphone.request"
 
@@ -16,13 +16,11 @@ class Packet:
   PROTOCOL_VERSION = 7
   DEVICE_TYPE = "desktop"
 
-  def __init__(self, _type=None):
+  def __init__(self, type_=None):
     self.data = {}
-    self.data["id"] = None if _type is None else round(time() * 1000)
-    self.data["type"] = _type
+    self.data["id"] = None if type_ is None else round(time() * 1000)
+    self.data["type"] = type_
     self.data["body"] = {}
-    self.data["payloadSize"] = 0
-    self.data["payloadTransferInfo"] = {}
 
   def __bytes__(self):
     return dumps(self.data).encode()
@@ -39,8 +37,8 @@ class Packet:
   def get(self, key, default=None):
     return self.data["body"].get(key, default)
 
-  def isType(self, _type):
-    return self.data.get("type") == _type
+  def isType(self, type_):
+    return self.data.get("type") == type_
 
   def getType(self):
     return self.data.get("type")
@@ -78,7 +76,7 @@ class Packet:
     if payload:
       packet.set("payloadHash", payload["digest"])
       packet.data["payloadSize"] = payload["size"]
-      packet.data["payloadTransferInfo"]["port"] = payload["port"]
+      packet.data["payloadTransferInfo"] = {"port": payload["port"]}
 
     return packet
 

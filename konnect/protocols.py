@@ -1,10 +1,9 @@
 from hashlib import md5
-from io import BytesIO
 from json.decoder import JSONDecodeError
 from logging import debug, error, exception, info, warning
 from os import makedirs
-from os.path import basename, getsize, join
-from shutil import move
+from os.path import basename, getsize, isfile, join
+from shutil import copyfile, move
 from tempfile import gettempdir, mkstemp
 from uuid import uuid4
 
@@ -36,6 +35,9 @@ class Konnect(LineReceiver):
   device = "unknown"
   timeout = None
 
+  def __init__(self):
+    self.address = None
+
   def connectionMade(self):
     self.transport.setTcpKeepAlive(1)
     self.factory.clients.add(self)
@@ -45,6 +47,9 @@ class Konnect(LineReceiver):
   def connectionLost(self, reason):
     info(f"Device {self.name} disconnected")
     self.factory.clients.remove(self)
+
+  def rawDataReceived(self, data):
+    pass
 
   def _sendPacket(self, data):
     debug(f"SendTo({self.address}) - {data}")
@@ -161,7 +166,7 @@ class Konnect(LineReceiver):
           title = notification[3]
           application = notification[4]
 
-          self.sendNotification(text, title, application, reference)
+          callLater(0.5, self.sendNotification, text, title, application, reference)
         else:
           self.sendCancel(reference)
           self.factory.database.dismissNotification(self.identifier, reference)
@@ -179,6 +184,7 @@ class Konnect(LineReceiver):
 
     if not self.transport.TLS:
       if packet.isType(PacketType.IDENTITY):
+        # TODO validate identifier against certificate
         self._handleIdentity(packet)
       else:
         warning(f"Device {self.name} not identified, ignoring non encrypted packet {packet.getType()}")
@@ -254,14 +260,17 @@ class KonnectFactory(Factory):
 
       payload = None
 
-      if icon:
+      if isfile(icon):
         _, temp = mkstemp()
 
-        with Image.open(BytesIO(icon)) as image:
-          image.thumbnail([MAX_ICON_SIZE] * 2, Resampling.LANCZOS)
-          image.save(temp, "PNG")
+        with Image.open(icon) as image:
+          if image.format != "PNG" or max(image.size) > MAX_ICON_SIZE:
+            image.thumbnail([MAX_ICON_SIZE] * 2, Resampling.LANCZOS)
+            image.save(temp, "PNG")
+          else:
+            copyfile(icon, temp)
 
-        digest = md5(open(temp, "rb").read()).hexdigest()
+        digest = md5(open(temp, "rb").read(), usedforsecurity=False).hexdigest()
         path = join(self.temp_dir, digest)
         move(temp, path)
 
@@ -356,12 +365,18 @@ class Discovery(DatagramProtocol):
       info(f"Received a UDP packet of wrong type {packet.getType()}")
     elif packet.get("deviceId") == self.identifier:
       debug("Ignoring my own broadcast")
+    elif 1716 < int(packet.get("tcpPort", 0)) < 1764:
+      debug("TCP port outside of kdeconnect's range")
     else:
       debug(f"Received UDP identity packet from {addr[0]}, trying reverse connection")
       self.announceIdentity(addr[0])
 
 
 class FileTransfer(Protocol, TimeoutMixin):
+  def __init__(self):
+    self.address = None
+    self.port = None
+
   def connectionMade(self):
     self.transport.setTcpNoDelay(True)
     self.transport.setTcpKeepAlive(0)
@@ -375,7 +390,7 @@ class FileTransfer(Protocol, TimeoutMixin):
     path = self.factory.jobs.get(self.port, "")
     debug(f"Transfer({self.address}) - File({basename(path)})")
 
-    if not path:
+    if not isfile(path):
       self.setTimeout(0)
       return
 
@@ -388,7 +403,8 @@ class FileTransfer(Protocol, TimeoutMixin):
 
         self.transport.write(chunk)
 
-    self.setTimeout(1)
+    self.transport.loseConnection()
+    self.setTimeout(3)
 
   def timeoutConnection(self):
     self.transport.abortConnection()
@@ -408,10 +424,9 @@ class TransferFactory(Factory):
 
   def reservePort(self, path):
     for port, path2 in self.jobs.items():
-      if path2:
-        continue
 
-      self.jobs[port] = path
-      return port
+      if not path2:
+        self.jobs[port] = path
+        return port
 
     return None

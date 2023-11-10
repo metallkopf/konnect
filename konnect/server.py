@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 
 
+import sys
 from argparse import ArgumentDefaultsHelpFormatter, ArgumentParser
 from logging import DEBUG, INFO, WARNING, basicConfig, getLogger, info
 from os import makedirs
 from os.path import expanduser
 from platform import node
-from sys import exit
 from uuid import uuid4
 
 from OpenSSL.crypto import Error
@@ -39,10 +39,10 @@ def main():
 
   if args.help:
     parser.print_help()
-    exit()
+    sys.exit(0)
   elif args.version:
     print(f"Konnectd {__version__}")
-    exit()
+    sys.exit(0)
 
   level = DEBUG if args.verbose else INFO
 
@@ -54,7 +54,7 @@ def main():
       basicConfig(format="%(levelname)s %(message)s", level=level, handlers=[handler])
     except ImportError:
       print("systemd-python is not installed")
-      exit(1)
+      sys.exit(1)
   else:
     basicConfig(format="%(asctime)s %(levelname)s %(message)s", level=level)
 

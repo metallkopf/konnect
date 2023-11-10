@@ -1,4 +1,3 @@
-from base64 import b64decode
 from json import dumps, loads
 from json.decoder import JSONDecodeError
 from logging import error, info
@@ -188,11 +187,7 @@ class API(Resource):
         title = data["title"]
         application = data["application"]
         reference = data.get("reference", "")
-
-        if data.get("icon"):
-          icon = b64decode(data.get("icon"))
-        else:
-          icon = None
+        icon = data.get("icon")
 
         result = self.konnect.sendNotification(identifier, text, title, application, reference, icon)
 

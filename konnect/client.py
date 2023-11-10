@@ -1,20 +1,13 @@
 #!/usr/bin/env python3
 
+import sys
 from argparse import ArgumentParser
-from base64 import b64encode
-from os import unlink
 from os.path import join
-from sys import argv, exit
-from tempfile import mkstemp
 
 from PIL import Image
-from PIL.Image import Resampling
 from requests import request
 
 from konnect import __version__
-
-
-MAX_ICON_SIZE = 128
 
 
 def main():
@@ -23,20 +16,20 @@ def main():
   parser.add_argument("--debug", action="store_true", default=False, help="Show debug messages")
 
   root = parser.add_argument_group("arguments")
-  main = root.add_mutually_exclusive_group(required=True)
-  main.add_argument("--devices", action="store_true", help="List all devices")
-  main.add_argument("--announce", action="store_true", help="Search for devices in the network")
-  main.add_argument("--command", choices=["info", "pair", "unpair", "ring", "ping", "notification", "cancel"])
-  main.add_argument("--help", action="store_true", help="This help")
-  main.add_argument("--version", action="store_true", help="Version information")
+  top = root.add_mutually_exclusive_group(required=True)
+  top.add_argument("--devices", action="store_true", help="List all devices")
+  top.add_argument("--announce", action="store_true", help="Search for devices in the network")
+  top.add_argument("--command", choices=["info", "pair", "unpair", "ring", "ping", "notification", "cancel"])
+  top.add_argument("--help", action="store_true", help="This help")
+  top.add_argument("--version", action="store_true", help="Version information")
 
-  is_command = "--command" in argv
+  is_command = "--command" in sys.argv
   command = parser.add_argument_group("command arguments")
   selector = command.add_mutually_exclusive_group(required=is_command)
   selector.add_argument("--identifier", metavar="ID", help="Device Identifier")
   selector.add_argument("--name", help="Device Name")
 
-  is_notification = is_command and "notification" in argv
+  is_notification = is_command and "notification" in sys.argv
   message = parser.add_argument_group("notification arguments")
   message.add_argument("--text", help="The text of the notification", required=is_notification)
   message.add_argument("--title", help="The title of the notification", required=is_notification)
@@ -44,7 +37,7 @@ def main():
   message.add_argument("--reference", metavar="REF", default="", help="An (optional) unique notification id")
   message.add_argument("--icon", default=None, help="The icon of the notification (optional)")
 
-  is_cancel = is_command and "cancel" in argv
+  is_cancel = is_command and "cancel" in sys.argv
   dismiss = parser.add_argument_group("cancel arguments")
   dismiss.add_argument("--reference2", metavar="REF2", help="Notification id", required=is_cancel)
 
@@ -52,10 +45,10 @@ def main():
 
   if args.help:
     parser.print_help()
-    exit()
+    sys.exit(0)
   elif args.version:
     print(f"Konnect {__version__}")
-    exit()
+    sys.exit(0)
 
   method = None
   url = f"http://localhost:{args.port}"
@@ -93,26 +86,14 @@ def main():
 
       if args.icon:
         try:
-          path = args.icon
-
-          with Image.open(args.icon) as image:
-            if image.format != "PNG" or max(image.size) > MAX_ICON_SIZE:
-              _, path = mkstemp()
-              image.thumbnail([MAX_ICON_SIZE] * 2, Resampling.LANCZOS)
-              image.save(path, "PNG")
-
-          with open(path, "rb") as handle:
-            icon = b64encode(handle.read())
-            data["icon"] = icon.decode()
-
-          if args.icon != path:
-            unlink(path)
+          with Image.open(args.icon):
+            data["icon"] = args.icon
         except ValueError:
           print("Error: unsupported icon format")
-          exit(1)
+          sys.exit(1)
         except FileNotFoundError:
           print("Error: icon not found")
-          exit(1)
+          sys.exit(1)
     elif args.command == "cancel":
       method = "DELETE"
       url = join(url, "notification", key, value, args.reference2)
@@ -121,7 +102,7 @@ def main():
     print("REQUEST:", method, url)
     print("", data)
 
-  response = request(method, url, json=data)
+  response = request(method, url, json=data, timeout=60)
 
   if args.debug:
     print("RESPONSE:", response.status_code, response.headers.get("content-type"))
