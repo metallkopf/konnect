@@ -1,4 +1,3 @@
-from os.path import join
 from sqlite3 import OperationalError, connect
 
 
@@ -18,7 +17,7 @@ class Database:
   ]
 
   def __init__(self, path):
-    self.instance = connect(join(path, "konnect.db"), isolation_level=None, check_same_thread=False)
+    self.instance = connect(path, isolation_level=None, check_same_thread=False)
     self._upgradeSchema()
 
   def _upgradeSchema(self):

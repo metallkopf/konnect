@@ -5,7 +5,7 @@ import sys
 from argparse import ArgumentDefaultsHelpFormatter, ArgumentParser
 from logging import DEBUG, INFO, WARNING, basicConfig, getLogger, info
 from os import makedirs
-from os.path import expanduser
+from os.path import expanduser, join
 from platform import node
 from uuid import uuid4
 
@@ -17,16 +17,16 @@ from konnect import __version__
 from konnect.api import API
 from konnect.certificate import Certificate
 from konnect.database import Database
-from konnect.protocols import Discovery, KonnectFactory, TransferFactory
+from konnect.protocols import MAX_PORT, MIN_PORT, Discovery, KonnectFactory, TransferFactory
 
 
 def main():
   parser = ArgumentParser(prog="konnectd", add_help=False, allow_abbrev=False, formatter_class=ArgumentDefaultsHelpFormatter)
   parser.add_argument("--name", default=node(), help="Device name")
-  parser.add_argument("--verbose", action="store_true", default=False, help="Show debug messages")
-  parser.add_argument("--discovery-port", metavar="PORT", default=1716, type=int, help="Discovery port")
-  parser.add_argument("--service-port", metavar="PORT", default=1764, type=int, help="Service port")
-  parser.add_argument("--transfer-port", metavar="PORT", default=1763, type=int, help="Transfer port (top)")
+  parser.add_argument("--debug", action="store_true", default=False, help="Show debug messages")
+  parser.add_argument("--discovery-port", metavar="PORT", default=MIN_PORT, type=int, help="Discovery port")
+  parser.add_argument("--service-port", metavar="PORT", default=MAX_PORT, type=int, help="Service port")
+  parser.add_argument("--transfer-port", metavar="PORT", default=MAX_PORT - 1, type=int, help="Transfer port (top)")
   parser.add_argument("--max-transfer-ports", metavar="NUM", default=3, type=int, help="Total open ports for transfer")
   parser.add_argument("--admin-port", metavar="PORT", default=8080, type=int, help="API port")
   parser.add_argument("--config-dir", metavar="DIR", default="~/.config/konnect", help="Config directory")
@@ -44,7 +44,7 @@ def main():
     print(f"Konnectd {__version__}")
     sys.exit(0)
 
-  level = DEBUG if args.verbose else INFO
+  level = DEBUG if args.debug else INFO
 
   if args.service is True:
     try:
@@ -62,7 +62,7 @@ def main():
 
   args.config_dir = expanduser(args.config_dir)
   makedirs(args.config_dir, exist_ok=True)
-  database = Database(args.config_dir)
+  database = Database(join(args.config_dir, "konnect.db"))
 
   try:
     options = Certificate.load_options(args.config_dir)

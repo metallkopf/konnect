@@ -18,9 +18,11 @@ class Packet:
 
   def __init__(self, type_=None):
     self.data = {}
-    self.data["id"] = None if type_ is None else round(time() * 1000)
-    self.data["type"] = type_
-    self.data["body"] = {}
+
+    if type_:
+      self.data["id"] = round(time() * 1000)
+      self.data["type"] = type_
+      self.data["body"] = {}
 
   def __bytes__(self):
     return dumps(self.data).encode()
@@ -42,6 +44,29 @@ class Packet:
 
   def getType(self):
     return self.data.get("type")
+
+  def isValid(self):
+    try:
+      int(self.data.get("id"))
+    except Exception as e:
+      return False
+
+    if not isinstance(self.data.get("body"), dict):
+      return False
+    elif not self.data.get("type"):
+      return False
+    elif self.isType(PacketType.IDENTITY):
+      # tcpPort not sent in tcp identity packet
+      return {"deviceId", "deviceName", "deviceType", "protocolVersion", "incomingCapabilities",
+                  "outgoingCapabilities"}.issubset(self.data["body"].keys())
+    elif self.isType(PacketType.PAIR):
+      return "pair" in self.data["body"].keys()
+    elif self.isType(PacketType.PING) or self.isType(PacketType.RING):
+      return True
+    elif self.isType(PacketType.NOTIFICATION):
+      return True
+    else:
+      return True  # TODO some other packets
 
   @staticmethod
   def createIdentity(identifier, name, port):

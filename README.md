@@ -80,13 +80,13 @@ venv/bin/konnect --name user@remotehost --command unpair
 venv/bin/konnectd --help
 ```
 ```
-usage: konnectd [--name NAME] [--verbose] [--discovery-port PORT] [--service-port PORT] [--transfer-port PORT]
+usage: konnectd [--name NAME] [--debug] [--discovery-port PORT] [--service-port PORT] [--transfer-port PORT]
                 [--max-transfer-ports NUM] [--admin-port PORT] [--config-dir DIR] [--receiver] [--service]
                 [--help] [--version]
 
 options:
   --name NAME           Device name (default: localhost)
-  --verbose             Show debug messages (default: False)
+  --debug               Show debug messages (default: False)
   --discovery-port PORT
                         Discovery port (default: 1716)
   --service-port PORT   Service port (default: 1764)

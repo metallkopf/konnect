@@ -5,6 +5,7 @@ from os import makedirs
 from os.path import basename, getsize, isfile, join
 from shutil import copyfile, move
 from tempfile import gettempdir, mkstemp
+from time import time
 from uuid import uuid4
 
 from PIL import Image
@@ -19,6 +20,10 @@ from konnect.packet import Packet, PacketType
 
 
 MAX_ICON_SIZE = 128
+MIN_PORT = 1716
+MAX_PORT = 1764
+DELAY_BETWEEN_PACKETS = 0.5
+BUFFER_SIZE = 8192
 
 
 class InternalStatus:
@@ -52,7 +57,7 @@ class Konnect(LineReceiver):
     pass
 
   def _sendPacket(self, data):
-    debug(f"SendTo({self.address}) - {data}")
+    debug(f"SendTCP({self.address}) - {data}")
     self.sendLine(bytes(data))
 
   def sendRing(self):
@@ -166,7 +171,7 @@ class Konnect(LineReceiver):
           title = notification[3]
           application = notification[4]
 
-          callLater(0.5, self.sendNotification, text, title, application, reference)
+          callLater(0.1, self.sendNotification, text, title, application, reference)
         else:
           self.sendCancel(reference)
           self.factory.database.dismissNotification(self.identifier, reference)
@@ -174,21 +179,39 @@ class Konnect(LineReceiver):
       debug("Ignoring unknown request")
 
   def lineReceived(self, line):
+    if self.status == InternalStatus.NOT_PAIRED and len(line) > BUFFER_SIZE:
+      warning(f"Suspiciously long identity package received. Closing connection. {self.address}")
+      self.transport.abortConnection()
+      return
+
     try:
       packet = Packet.load(line)
-      debug(f"RecvFrom({self.address}) - {packet}")
-    except JSONDecodeError as e:
+      debug(f"RecvTCP({self.address}) - {packet}")
+    except (JSONDecodeError, TypeError) as e:
       error(f"Unserialization error: {line}")
       exception(e)
+      self.transport.abortConnection()
       return
+
+    # if not packet.isValid():
+    #   warning("Ignoring malformed packet")
+    #   self.transport.abortConnection()
+    #   return
 
     if not self.transport.TLS:
       if packet.isType(PacketType.IDENTITY):
-        # TODO validate identifier against certificate
         self._handleIdentity(packet)
       else:
         warning(f"Device {self.name} not identified, ignoring non encrypted packet {packet.getType()}")
     else:
+      certificate = Certificate(self.transport.getPeerCertificate())
+      identifier = certificate.getSubject().commonName.decode()
+
+      if self.identifier != identifier:
+        warning(f"DeviceID in cert doesn't match deviceID in identity packet. {self.identifier} vs {identifier}")
+        self.transport.abortConnection()
+        return
+
       if packet.isType(PacketType.PAIR):
         self._handlePairing(packet)
       elif self.isTrusted():
@@ -337,8 +360,9 @@ class Discovery(DatagramProtocol):
   def __init__(self, identifier, name, discovery_port, service_port):
     self.identifier = identifier
     self.name = name
-    self.port = discovery_port
-    self.packet = Packet.createIdentity(self.identifier, self.name, service_port)
+    self.discovery_port = discovery_port
+    self.service_port = service_port
+    self.last_packets = {}
 
   def startProtocol(self):
     self.transport.setBroadcastAllowed(True)
@@ -346,28 +370,34 @@ class Discovery(DatagramProtocol):
 
   def announceIdentity(self, address="<broadcast>"):
     try:
+      packet = Packet.createIdentity(self.identifier, self.name, self.service_port)
       info("Broadcasting identity packet")
-      debug(f"SendTo({address}:{self.port}) - {self.packet}")
-      self.transport.write(bytes(self.packet), (address, self.port))
+      debug(f"SendUDP({address}:{MIN_PORT}) - {packet}")
+      self.transport.write(bytes(packet), (address, MIN_PORT))
     except OSError:
       warning("Failed to broadcast identity packet")
 
   def datagramReceived(self, datagram, addr):
     try:
       packet = Packet.load(datagram)
-      debug(f"RecvFrom({addr[0]}:{addr[1]}) - {packet}")
-    except JSONDecodeError as e:
+      debug(f"RecvUDP({addr[0]}:{addr[1]}) - {packet}")
+    except (JSONDecodeError, TypeError) as e:
       error(f"Unserialization error: {datagram}")
       exception(e)
       return
+
+    now = time()
 
     if not packet.isType(PacketType.IDENTITY):
       info(f"Received a UDP packet of wrong type {packet.getType()}")
     elif packet.get("deviceId") == self.identifier:
       debug("Ignoring my own broadcast")
-    elif 1716 < int(packet.get("tcpPort", 0)) < 1764:
+    elif self.last_packets.get(packet.get("deviceId"), 0) + DELAY_BETWEEN_PACKETS > now:
+      debug("Discarding second UDP packet from the same device {} received too quickly".format(packet.get("deviceId")))
+    elif int(packet.get("tcpPort", 0)) < MIN_PORT or int(packet.get("tcpPort", 0)) > MAX_PORT:
       debug("TCP port outside of kdeconnect's range")
     else:
+      self.last_packets[packet.get("deviceId")] = now
       debug(f"Received UDP identity packet from {addr[0]}, trying reverse connection")
       self.announceIdentity(addr[0])
 
