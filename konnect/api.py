@@ -10,6 +10,10 @@ from konnect import __version__
 
 class API(Resource):
   isLeaf = True
+  PATTERNS = [
+    r"^\/(?P<resource>ring|ping|notification|device)\/(?P<key>identifier|name)\/(?P<value>[\w\-.@]+)$",
+    r"^\/(?P<resource>notification)\/(?P<key>identifier|name)\/(?P<value>[\w\-.@]+)\/(?P<reference>.*)$",
+  ]
 
   def __init__(self, konnect, discovery):
     super().__init__()
@@ -35,6 +39,7 @@ class API(Resource):
       info(f"{address.host}:{address.port} - {method} {uri} - {code}")
     else:
       error(f"{address.host}:{address.port} - {method} {uri} - {code}")
+      response["message"] = response.get("message", "unknown error")
 
     return dumps(response).encode()
 
@@ -43,15 +48,10 @@ class API(Resource):
       return self._handleInfo()
     elif uri == "/device" and method == "GET":
       return self._handleDevices()
-    elif uri == "/announce" and method == "PUT":
+    elif uri == "/announce" and method in ["POST", "PUT"]:  # FIXME
       return self._handleAnnounce()
     else:
-      patterns = [
-        r"^\/(?P<resource>ring|ping|notification|device)\/(?P<key>identifier|name)\/(?P<value>[\w\-.@]+)$",
-        r"^\/(?P<resource>notification)\/(?P<key>identifier|name)\/(?P<value>[\w\-.@]+)\/(?P<reference>.*)$",
-      ]
-
-      for pattern in patterns:
+      for pattern in self.PATTERNS:
         matches = match(pattern, uri)
 
         if not matches:
@@ -91,7 +91,7 @@ class API(Resource):
     code = 500
 
     try:
-      self.discovery.broadcastIdentity()
+      self.discovery.announceIdentity()
       response["success"] = True
       code = 200
     except Exception:

@@ -1,4 +1,5 @@
 from hashlib import md5
+from json import loads
 from json.decoder import JSONDecodeError
 from logging import debug, error, exception, info, warning
 from os import makedirs
@@ -185,7 +186,8 @@ class Konnect(LineReceiver):
       return
 
     try:
-      packet = Packet.load(line)
+      data = loads(line)
+      packet = Packet.load(data)
       debug(f"RecvTCP({self.address}) - {packet}")
     except (JSONDecodeError, TypeError) as e:
       error(f"Unserialization error: {line}")
@@ -379,7 +381,8 @@ class Discovery(DatagramProtocol):
 
   def datagramReceived(self, datagram, addr):
     try:
-      packet = Packet.load(datagram)
+      data = loads(datagram)
+      packet = Packet.load(data)
       debug(f"RecvUDP({addr[0]}:{addr[1]}) - {packet}")
     except (JSONDecodeError, TypeError) as e:
       error(f"Unserialization error: {datagram}")

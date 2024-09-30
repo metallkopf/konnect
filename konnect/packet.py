@@ -1,4 +1,4 @@
-from json import dumps, loads
+from json import dumps
 from time import time
 from uuid import uuid4
 
@@ -48,15 +48,14 @@ class Packet:
   def isValid(self):
     try:
       int(self.data.get("id"))
-    except Exception as e:
+    except Exception:
       return False
 
     if not isinstance(self.data.get("body"), dict):
       return False
     elif not self.data.get("type"):
       return False
-    elif self.isType(PacketType.IDENTITY):
-      # tcpPort not sent in tcp identity packet
+    elif self.isType(PacketType.IDENTITY):  # tcpPort not sent in tcp identity packet
       return {"deviceId", "deviceName", "deviceType", "protocolVersion", "incomingCapabilities",
                   "outgoingCapabilities"}.issubset(self.data["body"].keys())
     elif self.isType(PacketType.PAIR):
@@ -124,6 +123,6 @@ class Packet:
   @staticmethod
   def load(data):
     packet = Packet()
-    packet.data.update(loads(data))
+    packet.data.update(data)
 
     return packet

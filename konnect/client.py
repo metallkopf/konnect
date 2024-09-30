@@ -2,12 +2,11 @@
 
 import sys
 from argparse import ArgumentParser
+from json import loads
 from os.path import join
 
 from PIL import Image
 from requests import request
-
-from konnect import __version__
 
 
 def main():
@@ -21,7 +20,6 @@ def main():
   top.add_argument("--announce", action="store_true", help="Search for devices in the network")
   top.add_argument("--command", choices=["info", "pair", "unpair", "ring", "ping", "notification", "cancel"])
   top.add_argument("--help", action="store_true", help="This help")
-  top.add_argument("--version", action="store_true", help="Version information")
 
   is_command = "--command" in sys.argv
   command = parser.add_argument_group("command arguments")
@@ -45,9 +43,6 @@ def main():
 
   if args.help:
     parser.print_help()
-    sys.exit(0)
-  elif args.version:
-    print(f"Konnect {__version__}")
     sys.exit(0)
 
   method = None
@@ -109,9 +104,7 @@ def main():
     print("", response.text)
 
   data = response.json()
-
-  if response.status_code != 200:
-    print("An error ocurred!")
+  print()
 
   if args.devices:
     for device in data["devices"]:
