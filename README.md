@@ -114,6 +114,7 @@ options:
 | POST | /ring/(identifier\|name)/:value | Ring device | |
 | POST | /notification/(identifier\|name)/:value | Send notification | text, title, application, reference (optional), icon (optional) |
 | DELETE | /notification/(identifier\|name)/:value/:reference | Cancel notification | |
+| POST | /custom/(identifier\|name)/:value | Custom packet (for testing only) | type, body |
 
 ## CLI usage
 ```bash
@@ -121,9 +122,9 @@ venv/bin/konnect --help
 ```
 ```
 usage: konnect [--port PORT] [--debug]
-               (--devices | --announce | --command {info,pair,unpair,ring,ping,notification,cancel} | --help | --version)
+               (--devices | --announce | --command {info,pair,unpair,ring,ping,notification,cancel,custom} | --help)
                [--identifier ID | --name NAME] [--text TEXT] [--title TITLE] [--application APP] [--reference REF]
-               [--icon ICON] [--reference2 REF2]
+               [--icon ICON] [--reference2 REF2] [--data DATA]
 
 options:
   --port PORT           Port running the admin interface
@@ -132,9 +133,8 @@ options:
 arguments:
   --devices             List all devices
   --announce            Search for devices in the network
-  --command {info,pair,unpair,ring,ping,notification,cancel}
+  --command {info,pair,unpair,ring,ping,notification,cancel,custom}
   --help                This help
-  --version             Version information
 
 command arguments:
   --identifier ID       Device Identifier
@@ -149,6 +149,9 @@ notification arguments:
 
 cancel arguments:
   --reference2 REF2     Notification id
+
+custom arguments:
+  --data DATA           Data (packet)
 ```
 
 ## Run as service

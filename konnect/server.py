@@ -84,7 +84,7 @@ def main():
     reactor.listenSSL(args.transfer_port - x, transfer, options, backlog=0, interface="0.0.0.0")
 
   reactor.listenUDP(args.discovery_port if args.receiver else 0, discovery, interface="0.0.0.0")
-  reactor.listenTCP(args.admin_port, Site(API(konnect, discovery)), interface="127.0.0.1")
+  reactor.listenTCP(args.admin_port, Site(API(konnect, discovery, args.debug)), interface="127.0.0.1")
 
   reactor.run()
 

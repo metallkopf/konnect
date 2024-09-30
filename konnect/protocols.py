@@ -73,6 +73,13 @@ class Konnect(LineReceiver):
     notification = Packet.createNotification(text, title, application, reference, payload)
     self._sendPacket(notification)
 
+  def sendCustom(self, data):
+    data["id"] = data.get("id", round(time() * 1000))
+    data["body"] = data.get("body", {})
+
+    packet = Packet.load(data)
+    self._sendPacket(packet)
+
   def sendCancel(self, reference):
     cancel = Packet.createCancel(reference)
     self._sendPacket(cancel)
@@ -271,6 +278,17 @@ class KonnectFactory(Factory):
 
       return True
     except AttributeError:
+      return False
+
+  def sendCustom(self, identifier, data):
+    if not self.isDeviceTrusted(identifier):
+      return None
+
+    try:
+      self._findClient(identifier).sendCustom(data)
+
+      return True
+    except:
       return False
 
   def sendNotification(self, identifier, text, title, application, reference, icon=None):

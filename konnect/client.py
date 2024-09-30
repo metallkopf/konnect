@@ -18,7 +18,7 @@ def main():
   top = root.add_mutually_exclusive_group(required=True)
   top.add_argument("--devices", action="store_true", help="List all devices")
   top.add_argument("--announce", action="store_true", help="Search for devices in the network")
-  top.add_argument("--command", choices=["info", "pair", "unpair", "ring", "ping", "notification", "cancel"])
+  top.add_argument("--command", choices=["info", "pair", "unpair", "ring", "ping", "notification", "cancel", "custom"])
   top.add_argument("--help", action="store_true", help="This help")
 
   is_command = "--command" in sys.argv
@@ -38,6 +38,10 @@ def main():
   is_cancel = is_command and "cancel" in sys.argv
   dismiss = parser.add_argument_group("cancel arguments")
   dismiss.add_argument("--reference2", metavar="REF2", help="Notification id", required=is_cancel)
+
+  is_custom = is_command and "custom" in sys.argv
+  custom = parser.add_argument_group("custom arguments")
+  custom.add_argument("--data", help="Data (packet)", required=is_custom)
 
   args = parser.parse_args()
 
@@ -74,6 +78,14 @@ def main():
     elif args.command == "ping":
       method = "POST"
       url = join(url, "ping", key, value)
+    elif args.command == "custom":
+      method = "POST"
+      url = join(url, "custom", key, value)
+      try:
+        data = loads(args.data)
+      except:
+        print("Error: invalid json")
+        sys.exit(1)
     elif args.command == "notification":
       method = "POST"
       url = join(url, "notification", key, value)

@@ -11,14 +11,15 @@ from konnect import __version__
 class API(Resource):
   isLeaf = True
   PATTERNS = [
-    r"^\/(?P<resource>ring|ping|notification|device)\/(?P<key>identifier|name)\/(?P<value>[\w\-.@]+)$",
+    r"^\/(?P<resource>ring|ping|notification|device|custom)\/(?P<key>identifier|name)\/(?P<value>[\w\-.@]+)$",
     r"^\/(?P<resource>notification)\/(?P<key>identifier|name)\/(?P<value>[\w\-.@]+)\/(?P<reference>.*)$",
   ]
 
-  def __init__(self, konnect, discovery):
+  def __init__(self, konnect, discovery, debug):
     super().__init__()
     self.konnect = konnect
     self.discovery = discovery
+    self.debug = debug
 
   def _getDeviceId(self, key, value):
     for device in self.konnect.getDevices().values():
@@ -75,6 +76,8 @@ class API(Resource):
             return self._handleNotification(identifier, request.content.read())
           elif method == "DELETE":
             return self._handleCancel(identifier, matches.group("reference"))
+        elif matches.group("resource") == "custom" and method == "POST":
+          return self._handleCustom(identifier, request.content.read())
 
     return {"success": False, "message": "invalid request"}, 400
 
@@ -113,6 +116,37 @@ class API(Resource):
     else:  # if result is None:
       response["message"] = "device not paired"
       code = 401
+
+    return response, code
+
+  def _handleCustom(self, identifier, data):
+    if not self.debug:
+      return {"success": False, "message": "server is not in debug mode"}, 403
+
+    response = {"success": False}
+    code = 500
+
+    try:
+      data = loads(data)
+
+      if "type" not in data:
+        response["message"] = "type not found"
+        code = 400
+      else:
+        result = self.konnect.sendCustom(identifier, data)
+
+        if result is True:
+          response["success"] = True
+          code = 200
+        elif result is False:
+          response["message"] = "device not reachable"
+          code = 404
+        else:  # if result is None:
+          response["message"] = "device not paired"
+          code = 401
+    except JSONDecodeError:
+      response["message"] = "unserialization error"
+      code = 400
 
     return response, code
 
