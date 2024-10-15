@@ -7,4 +7,5 @@ test.py
 */__pycache__/
 build/
 dist/
+tests/
 venv/

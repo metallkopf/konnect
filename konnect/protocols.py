@@ -414,7 +414,7 @@ class Discovery(DatagramProtocol):
     elif packet.get("deviceId") == self.identifier:
       debug("Ignoring my own broadcast")
     elif self.last_packets.get(packet.get("deviceId"), 0) + DELAY_BETWEEN_PACKETS > now:
-      debug("Discarding second UDP packet from the same device {} received too quickly".format(packet.get("deviceId")))
+      debug(f"Discarding second UDP packet from the same device {packet.get('deviceId')} received too quickly")
     elif int(packet.get("tcpPort", 0)) < MIN_PORT or int(packet.get("tcpPort", 0)) > MAX_PORT:
       debug("TCP port outside of kdeconnect's range")
     else:

@@ -31,7 +31,7 @@ class Certificate:
       ]
     )
 
-    before = datetime.utcnow() - timedelta(days=365)
+    before = datetime.now() - timedelta(days=365)
     after = before + timedelta(days=3650)
 
     debug("Generating certificate")
@@ -48,8 +48,10 @@ class Certificate:
 
   @staticmethod
   def load_options(path):
-    certificate = open(join(path, Certificate.CERTIFICATE_FILE), "rb").read() + \
-      open(join(path, Certificate.PRIVATE_KEY_FILE), "rb").read()
+    with open(join(path, Certificate.CERTIFICATE_FILE), "rb") as cert, \
+      open(join(path, Certificate.PRIVATE_KEY_FILE), "rb") as key:
+      certificate = cert.read() + key.read()
+
     pem = PrivateCertificate.loadPEM(certificate)
 
     return pem.options()

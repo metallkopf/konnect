@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "konnect"
 authors = [{name = "metallkopf"}]
 description = "Headless KDE Connect"
-requires-python = ">=3.7"
+requires-python = ">=3.10"
 keywords = ["headless", "kdeconnect", "kde-connect", "server"]
 license = {text = "GPL-2.0-only"}
 readme = {file = "README.md", content-type = "text/markdown"}
@@ -37,7 +37,7 @@ classifiers = [
 ]
 
 [project.optional-dependencies]
-devel = ["build", "flake8", "isort", "twine"]
+devel = ["build", "flake8", "isort", "pytest", "twine"]
 systemd = ["systemd-python"]
 
 [project.scripts]
@@ -49,3 +49,6 @@ packages = ["konnect"]
 
 [tool.setuptools.dynamic]
 version = {attr = "konnect.__version__"}
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

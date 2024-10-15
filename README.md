@@ -2,7 +2,7 @@
 Konnect is based on the [KDE Connect](https://community.kde.org/KDEConnect) protocol and allows a non-interactive enviroment (headless server) to send notifications to your devices via Rest API or a *simple* CLI
 
 ## Prerequisites
-- Python 3.7+
+- Python 3.10+
 - Systemd (optional)
 
 ## Installation
@@ -214,6 +214,8 @@ Tested *manually* on [kdeconnect](https://invent.kde.org/kde/kdeconnect-kde) 1.3
 venv/bin/isort --diff konnect/*.py
 
 venv/bin/flake8 konnect/*.py
+
+venv/bin/pytest -vv
 ```
 
 ## Releasing
