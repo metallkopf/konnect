@@ -1,4 +1,5 @@
 from json import dumps
+from re import sub
 from time import time
 from uuid import uuid4
 
@@ -6,7 +7,7 @@ from uuid import uuid4
 class PacketType:
   IDENTITY = "kdeconnect.identity"
   NOTIFICATION = "kdeconnect.notification"
-  REQUEST = "kdeconnect.notification.request"
+  NOTIFICATION_REQUEST = "kdeconnect.notification.request"
   PAIR = "kdeconnect.pair"
   PING = "kdeconnect.ping"
   RING = "kdeconnect.findmyphone.request"
@@ -57,7 +58,7 @@ class Packet:
       return False
     elif self.isType(PacketType.IDENTITY):  # tcpPort not sent in tcp identity packet
       return {"deviceId", "deviceName", "deviceType", "protocolVersion", "incomingCapabilities",
-                  "outgoingCapabilities"}.issubset(self.data["body"].keys())
+              "outgoingCapabilities"}.issubset(self.data["body"].keys())
     elif self.isType(PacketType.PAIR):
       return "pair" in self.data["body"].keys()
     elif self.isType(PacketType.PING) or self.isType(PacketType.RING):
@@ -67,6 +68,9 @@ class Packet:
     else:
       return True  # TODO some other packets
 
+  def filterChars(self, value):
+    return sub(r"[^A-Za-z0-9_]", "_", value)
+
   @staticmethod
   def createIdentity(identifier, name, port):
     packet = Packet(PacketType.IDENTITY)
@@ -75,7 +79,7 @@ class Packet:
     packet.set("deviceName", name)
     packet.set("deviceType", Packet.DEVICE_TYPE)
     packet.set("tcpPort", port)
-    packet.set("incomingCapabilities", [PacketType.PING])
+    packet.set("incomingCapabilities", [PacketType.PING, PacketType.NOTIFICATION_REQUEST])
     packet.set("outgoingCapabilities", [PacketType.RING, PacketType.NOTIFICATION, PacketType.PING])
 
     return packet

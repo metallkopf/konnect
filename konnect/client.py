@@ -2,128 +2,150 @@
 
 import sys
 from argparse import ArgumentParser
-from json import loads
+from json import dumps, loads
 from os.path import join
+from traceback import print_exc
 
 from PIL import Image
 from requests import request
+from requests.exceptions import ConnectionError
 
 
-def main():
-  parser = ArgumentParser(prog="konnect", add_help=False, allow_abbrev=False)
-  parser.add_argument("--port", default=8080, type=int, help="Port running the admin interface")
-  parser.add_argument("--debug", action="store_true", default=False, help="Show debug messages")
-
-  root = parser.add_argument_group("arguments")
-  top = root.add_mutually_exclusive_group(required=True)
-  top.add_argument("--devices", action="store_true", help="List all devices")
-  top.add_argument("--announce", action="store_true", help="Search for devices in the network")
-  top.add_argument("--command", choices=["info", "pair", "unpair", "ring", "ping", "notification", "cancel", "custom"])
-  top.add_argument("--help", action="store_true", help="This help")
-
-  is_command = "--command" in sys.argv
-  command = parser.add_argument_group("command arguments")
-  selector = command.add_mutually_exclusive_group(required=is_command)
-  selector.add_argument("--identifier", metavar="ID", help="Device Identifier")
-  selector.add_argument("--name", help="Device Name")
-
-  is_notification = is_command and "notification" in sys.argv
-  message = parser.add_argument_group("notification arguments")
-  message.add_argument("--text", help="The text of the notification", required=is_notification)
-  message.add_argument("--title", help="The title of the notification", required=is_notification)
-  message.add_argument("--application", metavar="APP", help="The app that generated the notification", required=is_notification)
-  message.add_argument("--reference", metavar="REF", default="", help="An (optional) unique notification id")
-  message.add_argument("--icon", default=None, help="The icon of the notification (optional)")
-
-  is_cancel = is_command and "cancel" in sys.argv
-  dismiss = parser.add_argument_group("cancel arguments")
-  dismiss.add_argument("--reference2", metavar="REF2", help="Notification id", required=is_cancel)
-
-  is_custom = is_command and "custom" in sys.argv
-  custom = parser.add_argument_group("custom arguments")
-  custom.add_argument("--data", help="Data (packet)", required=is_custom)
-
-  args = parser.parse_args()
-
-  if args.help:
-    parser.print_help()
-    sys.exit(0)
-
+def query(args):
   method = None
   url = f"http://localhost:{args.port}"
   data = {}
 
-  if args.devices:
+  if args.action == "version":
+    method = "GET"
+  elif args.action == "devices":
     method = "GET"
     url = join(url, "device")
-  elif args.announce:
-    method = "POST"
-    url = join(url, "announce")
+  elif args.action == "announce":
+    method = "PUT"
   else:
-    key = "identifier" if args.identifier else "name"
-    value = args.identifier or args.name
-
-    if args.command == "info":
+    if args.action == "device":
       method = "GET"
-      url = join(url, "device", key, value)
-    elif args.command == "pair":
+      url = join(url, "device", args.device)
+    elif args.action == "pair":
       method = "POST"
-      url = join(url, "device", key, value)
-    elif args.command == "unpair":
+      url = join(url, "device", args.device)
+    elif args.action == "unpair":
       method = "DELETE"
-      url = join(url, "device", key, value)
-    elif args.command == "ring":
+      url = join(url, "device", args.device)
+    elif args.action == "ring":
       method = "POST"
-      url = join(url, "ring", key, value)
-    elif args.command == "ping":
+      url = join(url, "ring", args.device)
+    elif args.action == "ping":
       method = "POST"
-      url = join(url, "ping", key, value)
-    elif args.command == "custom":
+      url = join(url, "ping", args.device)
+    elif args.action == "custom":
       method = "POST"
-      url = join(url, "custom", key, value)
+      url = join(url, "custom", args.device)
       try:
         data = loads(args.data)
-      except:
+      except Exception:
         print("Error: invalid json")
         sys.exit(1)
-    elif args.command == "notification":
-      method = "POST"
-      url = join(url, "notification", key, value)
-      data = {"text": args.text, "title": args.title, "application": args.application, "reference": args.reference}
+    elif args.action == "notification":
+      if args.cancel:
+        method = "DELETE"
+        url = join(url, "notification", args.device, args.reference)
+      else:
+        method = "POST"
+        url = join(url, "notification", args.device)
+        data = {"text": args.text, "title": args.title, "application": args.application, "reference": args.reference}
 
-      if args.icon:
-        try:
-          with Image.open(args.icon):
-            data["icon"] = args.icon
-        except ValueError:
-          print("Error: unsupported icon format")
-          sys.exit(1)
-        except FileNotFoundError:
-          print("Error: icon not found")
-          sys.exit(1)
-    elif args.command == "cancel":
-      method = "DELETE"
-      url = join(url, "notification", key, value, args.reference2)
+        if args.icon:
+          try:
+            with Image.open(args.icon):
+              data["icon"] = args.icon
+          except ValueError:
+            print("Error: unsupported icon format")
+            sys.exit(1)
+          except FileNotFoundError:
+            print("Error: icon not found")
+            sys.exit(1)
 
   if args.debug:
     print("REQUEST:", method, url)
     print("", data)
 
-  response = request(method, url, json=data, timeout=60)
+  try:
+    response = request(method, url, json=data, timeout=60)
+  except ConnectionError:
+    print("ERROR: cannot connect to server")
+    sys.exit(1)
 
   if args.debug:
     print("RESPONSE:", response.status_code, response.headers.get("content-type"))
     print("", response.text)
 
-  data = response.json()
-  print()
+  try:
+    if len(response.text):
+      data = response.json()
+  except Exception as e:
+    print("EXCEPTION:")
+    print_exc(e)
+    data = {}
+    print()
 
-  if args.devices:
-    for device in data["devices"]:
-      print("- {name}: {identifier} (Trusted: {trusted}, Reachable: {reachable})".format(**device))
-  elif args.command is not None:
-    for key, value in data.items():
-      print(f"{key.title()}: {value}")
+  print(dumps(data, indent=2))
+  sys.exit(int(data["success"]))
+
+
+def main():
+  parser = ArgumentParser(prog="konnect", add_help=False, allow_abbrev=False)
+  parser.add_argument("--port", default=8080, type=int, help="Port running the admin interface")
+  parser.add_argument("--debug", action="store_true", help="Show debug messages")
+
+  subparsers = parser.add_subparsers(dest="action", title="actions")
+  subparsers.add_parser("announce", help="Announce your identity")
+
+  custom = subparsers.add_parser("custom", help="Send custom packet...")
+  custom.add_argument("--device", metavar="DEV", type=str, required=True, help="Device @name or id")
+  custom.add_argument("--data", type=str, help="JSON string")
+
+  device = subparsers.add_parser("device", help="Show device info")  # FIXME
+  device.add_argument("--device", metavar="DEV", type=str, required=True, help="Device @name or id")
+
+  subparsers.add_parser("devices", help="List devices")
+
+
+  notification = subparsers.add_parser("notification", help="Send or cancel notification...")
+  notification.add_argument("--device", metavar="DEV", type=str, required=True, help="Device @name or id")
+  notification.add_argument("--cancel", action="store_true", help="Cancel notification")
+  is_cancel = "--cancel" in sys.argv
+  cancel = notification.add_argument_group("cancel")
+  cancel.add_argument("--reference", type=str, required=is_cancel, help="Reference")
+  message = notification.add_argument_group("message")
+  message.add_argument("--title", type=str, required=not is_cancel, help="Title")
+  message.add_argument("--text", type=str, required=not is_cancel, help="Text")
+  message.add_argument("--application", type=str, required=not is_cancel, help="Application")
+  message.add_argument("--icon", type=str, help="Icon (filename)")
+
+  pair = subparsers.add_parser("pair", help="Pair with device...")
+  pair.add_argument("--device", metavar="DEV", type=str, required=True, help="Device @name or id")
+
+  ping = subparsers.add_parser("ping", help="Send ping...")
+  ping.add_argument("--device", metavar="DEV", type=str, required=True, help="Device @name or id")
+
+  ring = subparsers.add_parser("ring", help="Ring my device...")
+  ring.add_argument("--device", metavar="DEV", type=str, required=True, help="Device @name or id")
+
+  unpair = subparsers.add_parser("unpair", help="Unpair trusted device...")
+  unpair.add_argument("--device", metavar="DEV", type=str, required=True, help="Device @name or id")
+
+  subparsers.add_parser("version", help="Show server version")
+  subparsers.add_parser("help", help="This")
+
+  args = parser.parse_args()
+
+  if args.action in [None, "help"]:
+    parser.print_help()
+    sys.exit(0)
+
+  query(args)
 
 
 if __name__ == "__main__":

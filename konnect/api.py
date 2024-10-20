@@ -1,27 +1,58 @@
+from hashlib import md5
 from json import dumps, loads
 from json.decoder import JSONDecodeError
-from logging import error, info
+from logging import debug, error, info
+from os import makedirs
+from os.path import getsize, isfile, join
 from re import match
+from shutil import copyfile, move
+from tempfile import gettempdir, mkstemp
+from uuid import uuid4
 
+from PIL import Image
+from PIL.Image import Resampling
+from twisted.internet.address import IPv4Address
 from twisted.web.resource import Resource
 
 from konnect import __version__
+from konnect.exceptions import ApiError, DeviceNotReachableError, DeviceNotTrustedError, InvalidRequestError, \
+  NotImplementedError2, UnserializationError
+
+
+MAX_ICON_SIZE = 96
+
+FUNCTIONS = {
+  # (method, resource): (trusted, reachable)
+  # TODO alias, params?
+  ("POST", "pair"): (False, True),
+  ("DELETE", "pair"): (True, False),
+  ("GET", "device"): (True, False),
+  ("POST", "ping"): (True, True),
+  ("POST", "ring"): (True, True),
+  ("POST", "notification"): (True, False),
+  ("DELETE", "notification"): (True, False),
+  ("POST", "custom"): (True, True),
+}
 
 
 class API(Resource):
   isLeaf = True
-  PATTERNS = [
-    r"^\/(?P<resource>ring|ping|notification|device|custom)\/(?P<key>identifier|name)\/(?P<value>[\w\-.@]+)$",
-    r"^\/(?P<resource>notification)\/(?P<key>identifier|name)\/(?P<value>[\w\-.@]+)\/(?P<reference>.*)$",
-  ]
+  PATTERN = r"^\/(?P<res>[a-z]+)\/(?P<dev>[\w+\.@\- ]+)((?:\/)(?P<id>[\w+\-]+))?$"
 
-  def __init__(self, konnect, discovery, debug):
+  def __init__(self, konnect, discovery, database, debug):
     super().__init__()
     self.konnect = konnect
     self.discovery = discovery
+    self.database = database
     self.debug = debug
 
-  def _getDeviceId(self, key, value):
+    self.temp_dir = join(gettempdir(), "konnect_" + konnect.name)
+    makedirs(self.temp_dir, exist_ok=True)
+
+  def _getDeviceId(self, item):
+    key = "name" if item[0] == "@" else "identifier"
+    value = item[1:] if key == "name" else item
+
     for device in self.konnect.getDevices().values():
       if device[key] == value:
         return device["identifier"]
@@ -32,228 +63,196 @@ class API(Resource):
     request.setHeader(b"content-type", b"application/json")
     uri = request.uri.decode()
     method = request.method.decode()
-    response, code = self.process(request, method, uri)
+    content = request.content.read() if request.getHeader("content-length") else b"{}"
+
+    debug(f"ReqHTTP({method} {uri}) - Body({content})")
+
+    try:
+      response, code = self.process(method, uri, content)
+      response["success"] = True
+    except Exception as e:
+      if isinstance(e, ApiError):
+        response = {"message": e.args[0]}
+        code = e.code
+
+        if e.parent:
+          response["exception"] = e.parent
+      else:
+        response = {"message": "unknown error", "exception": str(e)}
+        code = 500
+
+      response["success"] = False
+
     request.setResponseCode(code)
     address = request.getClientAddress()
 
-    if code // 100 == 2 or code // 100 == 3:
-      info(f"{address.host}:{address.port} - {method} {uri} - {code}")
+    debug(f"RespHTTP({code}) - Body({response})")
+
+    log = info if code // 100 != 5 else error
+
+    if isinstance(address, IPv4Address):
+      log(f"{address.host}:{address.port} - {method} {uri} - {code}")
     else:
-      error(f"{address.host}:{address.port} - {method} {uri} - {code}")
-      response["message"] = response.get("message", "unknown error")
+      log(f"unix:socket - {method} {uri} - {code}")
 
     return dumps(response).encode()
 
-  def process(self, request, method, uri):
+  def process(self, method, uri, content):
     if uri == "/" and method == "GET":
-      return self._handleInfo()
+      return self._handleVersion()
+    elif uri == "/" and method == "PUT":
+      return self._handleAnnounce()
     elif uri == "/device" and method == "GET":
       return self._handleDevices()
-    elif uri == "/announce" and method in ["POST", "PUT"]:  # FIXME
-      return self._handleAnnounce()
-    else:
-      for pattern in self.PATTERNS:
-        matches = match(pattern, uri)
 
-        if not matches:
-          continue
+    matches = match(self.PATTERN, uri)
 
-        identifier = self._getDeviceId(matches.group("key"), matches.group("value"))
+    if not matches:
+      raise NotImplementedError2()
 
-        if matches.group("resource") == "ping" and method == "POST":
-          return self._handlePing(identifier)
-        elif matches.group("resource") == "ring" and method == "POST":
-          return self._handleRing(identifier)
-        elif matches.group("resource") == "device":
-          if method == "GET":
-            return self._handleDevice(identifier)
-          elif method == "POST":
-            return self._handlePairing(identifier, True)
-          elif method == "DELETE":
-            return self._handlePairing(identifier, False)
-        elif matches.group("resource") == "notification":
-          if method == "POST":
-            return self._handleNotification(identifier, request.content.read())
-          elif method == "DELETE":
-            return self._handleCancel(identifier, matches.group("reference"))
-        elif matches.group("resource") == "custom" and method == "POST":
-          return self._handleCustom(identifier, request.content.read())
+    data = {}
+    try:
+      data = loads(content)
+    except JSONDecodeError as e:
+      raise UnserializationError(e)
 
-    return {"success": False, "message": "invalid request"}, 400
+    checks = FUNCTIONS.get((method, matches["res"]))
 
-  def _handleInfo(self):
-    return {"id": self.konnect.identifier, "name": self.konnect.name, "application": "Konnect " + __version__, "success": True}, 200
+    if not checks:
+      raise NotImplementedError2()
 
-  def _handleDevices(self):
-    response = {"devices": list(self.konnect.getDevices().values()), "success": True}
+    identifier = self._getDeviceId(matches["dev"])
 
-    return response, 200
+    if not self.database.isDeviceTrusted(identifier) and checks[0]:
+      raise DeviceNotTrustedError()
+
+    client = self.konnect.findClient(identifier)
+
+    if not client and checks[1]:
+      raise DeviceNotReachableError()
+
+    name = f"_handle{method.title()}{matches['res'].title()}"
+
+    if not hasattr(self, name):
+      raise NotImplementedError2()
+
+    try:
+      function = getattr(self, name)
+    except AttributeError as e:
+      raise NotImplementedError2(e)
+
+    params = [identifier, client]
+
+    if matches["id"]:
+      params.append(matches["id"])
+
+    if method in ["POST", "PUT"] and data:
+      params.append(data)
+
+    try:
+      return function(*params)
+    except TypeError as e:
+      raise InvalidRequestError(e)
+
+  def _handleVersion(self):
+    info = {"id": self.konnect.identifier, "name": self.konnect.name, "application": "Konnect " + __version__}
+    return info, 200
 
   def _handleAnnounce(self):
-    response = {"success": False}
-    code = 500
-
     try:
       self.discovery.announceIdentity()
-      response["success"] = True
-      code = 200
+      return {}, 204
     except Exception:
-      response["message"] = "failed to broadcast identity packet"
+      raise ApiError("failed to broadcast identity packet", 500)
 
-    return response, code
+  def _handleDevices(self):
+    return {"devices": list(self.konnect.getDevices().values())}, 200
 
-  def _handleRing(self, identifier):
-    response = {"success": False}
-    code = 500
-    result = self.konnect.sendRing(identifier)
 
-    if result is True:
-      response["success"] = True
-      code = 200
-    elif result is False:
-      response["message"] = "device not reachable"
-      code = 404
-    else:  # if result is None:
-      response["message"] = "device not paired"
-      code = 401
+  def _handlePostPair(self, identifier, client):
+    client.sendPair()
+    return {}, 200
 
-    return response, code
+  def _handleDeletePair(self, identifier, client):
+    self.database.unpairDevice(identifier)
+    client.sendUnpair()
+    return {}, 200
 
-  def _handleCustom(self, identifier, data):
-    if not self.debug:
-      return {"success": False, "message": "server is not in debug mode"}, 403
-
-    response = {"success": False}
-    code = 500
-
-    try:
-      data = loads(data)
-
-      if "type" not in data:
-        response["message"] = "type not found"
-        code = 400
-      else:
-        result = self.konnect.sendCustom(identifier, data)
-
-        if result is True:
-          response["success"] = True
-          code = 200
-        elif result is False:
-          response["message"] = "device not reachable"
-          code = 404
-        else:  # if result is None:
-          response["message"] = "device not paired"
-          code = 401
-    except JSONDecodeError:
-      response["message"] = "unserialization error"
-      code = 400
-
-    return response, code
-
-  def _handlePing(self, identifier):
-    response = {"success": False}
-    code = 500
-    result = self.konnect.sendPing(identifier)
-
-    if result is True:
-      response["success"] = True
-      code = 200
-    elif result is False:
-      response["message"] = "device not reachable"
-      code = 404
-    else:  # if result is None:
-      response["message"] = "device not paired"
-      code = 401
-
-    return response, code
-
-  def _handleDevice(self, identifier):
+  def _handleGetDevice(self, identifier, client):
     for device in self.konnect.getDevices().values():
       if device["identifier"] == identifier:
-        device["success"] = True
         return device, 200
 
-    return {"success": False, "message": "device not reachable"}, 404
+    raise Exception()
 
-  def _handlePairing(self, identifier, pair):
-    response = {"success": False}
-    code = 500
+  def _handlePostPing(self, identifier, client):
+    client.sendPing()
+    return {}, 200
 
-    if pair is True:
-      result = self.konnect.requestPair(identifier)
+  def _handlePostRing(self, identifier, client):
+    client.sendRing()
+    return {}, 200
 
-      if result is False:
-        response["success"] = True
-        code = 200
-      elif result is True:
-        response["message"] = "already paired"
-        code = 304
-      else:  # if result is None:
-        response["message"] = "device not reachable"
-        code = 404
-    else:
-      result = self.konnect.requestUnpair(identifier)
+  def _handlePostNotification(self, identifier, client, data):
+    if "text" not in data or "title" not in data or "application" not in data:
+      raise ApiError("text or title or application not found", 400)
 
-      if result is True:
-        response["success"] = True
-        code = 200
-      elif result is False:
-        response["message"] = "device not paired"
-        code = 401
-      else:  # if result is None:
-        response["message"] = "device not reachable"
-        code = 404
+    text = data["text"]
+    title = data["title"]
+    application = data["application"]
+    reference = data.get("reference", "")
+    icon = data.get("icon")
 
-    return response, code
+    if not isinstance(reference, str) or len(reference) == 0:
+      reference = str(uuid4())
 
-  def _handleNotification(self, identifier, data):
-    response = {"success": False}
-    code = 500
+    payload = None
 
-    try:
-      data = loads(data)
+    if icon and isfile(icon):
+      _, temp = mkstemp()
 
-      if "text" not in data or "title" not in data or "application" not in data:
-        response["message"] = "text or title or application not found"
-        code = 400
-      else:
-        text = data["text"]
-        title = data["title"]
-        application = data["application"]
-        reference = data.get("reference", "")
-        icon = data.get("icon")
+      with Image.open(icon) as image:
+        if image.format != "PNG" or max(image.size) > MAX_ICON_SIZE:
+          image.thumbnail([MAX_ICON_SIZE] * 2, Resampling.LANCZOS)
+          image.save(temp, "PNG")
+        else:
+          copyfile(icon, temp)
 
-        result = self.konnect.sendNotification(identifier, text, title, application, reference, icon)
+      with open(temp, "rb") as tmp:
+        digest = md5(tmp.read(), usedforsecurity=False).hexdigest()
 
-        if result is True:
-          response["success"] = True
-          code = 200
-        elif result is False:
-          response["message"] = "device not reachable"
-          code = 404
-        else:  # if result is None:
-          response["message"] = "device not paired"
-          code = 401
-    except JSONDecodeError:
-      response["message"] = "unserialization error"
-      code = 400
+      path = join(self.temp_dir, digest)
+      move(temp, path)
 
-    return response, code
+      port = self.konnect.transfer.reservePort(path)
 
-  def _handleCancel(self, identifier, reference):
-    response = {"success": False}
-    code = 500
+      if port:
+        payload = {"digest": digest, "size": getsize(path), "port": port}
 
-    result = self.konnect.sendCancel(identifier, reference)
+    self.database.persistNotification(identifier, text, title, application, reference)
 
-    if result is True:
-      response["success"] = True
-      code = 200
-    elif result is False:
-      response["message"] = "device not reachable"
-      code = 404
-    else:  # if result is None:
-      response["message"] = "device not paired"
-      code = 401
+    if client:
+      client.sendNotification(text, title, application, reference, payload)
 
-    return response, code
+    return {"reference": reference}, 201
+
+  def _handleDeleteNotification(self, identifier, client, reference=None):
+    if not reference:
+      return {}, 501
+
+    self.database.cancelNotification(identifier, reference)
+
+    if client:
+      client.sendCancel(reference)
+
+    return {}, 204
+
+  def _handlePostCustom(self, identifier, client, data):
+    if not self.debug:
+      raise ApiError("server is not in debug mode", 403)
+
+    if not isinstance(data, dict) or "type" not in data:
+      raise ApiError("type not found", 400)
+
+    client.sendCustom(data)
+    return {}, 200

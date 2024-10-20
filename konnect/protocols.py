@@ -1,17 +1,11 @@
-from hashlib import md5
 from json import loads
 from json.decoder import JSONDecodeError
 from logging import debug, error, exception, info, warning
-from os import makedirs
-from os.path import basename, getsize, isfile, join
-from shutil import copyfile, move
-from tempfile import gettempdir, mkstemp
+from os.path import basename, isfile
+from subprocess import Popen
 from time import time
-from uuid import uuid4
 
-from PIL import Image
-from PIL.Image import Resampling
-from twisted.internet.protocol import DatagramProtocol, Factory, Protocol
+from twisted.internet.protocol import DatagramProtocol, Protocol
 from twisted.internet.reactor import callLater
 from twisted.internet.ssl import Certificate
 from twisted.protocols.basic import LineReceiver
@@ -20,7 +14,6 @@ from twisted.protocols.policies import TimeoutMixin
 from konnect.packet import Packet, PacketType
 
 
-MAX_ICON_SIZE = 128
 MIN_PORT = 1716
 MAX_PORT = 1764
 DELAY_BETWEEN_PACKETS = 0.5
@@ -40,6 +33,7 @@ class Konnect(LineReceiver):
   name = "unnamed"
   device = "unknown"
   timeout = None
+  database = None
 
   def __init__(self):
     self.address = None
@@ -84,14 +78,14 @@ class Konnect(LineReceiver):
     cancel = Packet.createCancel(reference)
     self._sendPacket(cancel)
 
-  def requestPair(self):
+  def sendPair(self):
     self.status = InternalStatus.REQUESTED
     self._cancelTimeout()
-    self.timeout = callLater(30, self.requestUnpair)
+    self.timeout = callLater(30, self.sendUnpair)
     pair = Packet.createPair(True)
     self._sendPacket(pair)
 
-  def requestUnpair(self):
+  def sendUnpair(self):
     if self.status == InternalStatus.REQUESTED:
       info("Pairing request timed out")
 
@@ -99,7 +93,7 @@ class Konnect(LineReceiver):
     self.status = InternalStatus.NOT_PAIRED
     pair = Packet.createPair(False)
     self._sendPacket(pair)
-    self.factory.database.unpairDevice(self.identifier)
+    self.database.unpairDevice(self.identifier)
 
   def _cancelTimeout(self):
     if self.timeout is not None and self.timeout.active():
@@ -107,7 +101,7 @@ class Konnect(LineReceiver):
       self.timeout = None
 
   def isTrusted(self):
-    return self.factory.database.isDeviceTrusted(self.identifier)
+    return self.database.isDeviceTrusted(self.identifier)
 
   def _handleIdentity(self, packet):
     self.identifier = packet.get("deviceId")
@@ -137,16 +131,16 @@ class Konnect(LineReceiver):
         self.status = InternalStatus.PAIRED
 
         if self.isTrusted():
-          self.factory.database.updateDevice(self.identifier, self.name, self.device)
+          self.database.updateDevice(self.identifier, self.name, self.device)
         else:
-          self.factory.database.pairDevice(self.identifier, certificate, self.name, self.device)
+          self.database.pairDevice(self.identifier, certificate, self.name, self.device)
       else:
         info("Pair request")
         pair = Packet.createPair(False)
 
         if self.status == InternalStatus.PAIRED or self.isTrusted():
           info("I'm already paired, but they think I'm not")
-          self.factory.database.updateDevice(self.identifier, self.name, self.device)
+          self.database.updateDevice(self.identifier, self.name, self.device)
           pair.set("pair", True)
         else:
           info("Pairing started by the other end, rejecting their request")
@@ -159,18 +153,18 @@ class Konnect(LineReceiver):
         info("Canceled by other peer")
 
       self.status = InternalStatus.NOT_PAIRED
-      self.factory.database.unpairDevice(self.identifier)
+      self.database.unpairDevice(self.identifier)
 
   def _handleNotify(self, packet):
     if packet.get("cancel") is not None:
       reference = packet.get("cancel")
       debug(f"Dismiss notification request for {reference}")
-      self.factory.database.dismissNotification(self.identifier, reference)
+      self.database.dismissNotification(self.identifier, reference)
     elif packet.get("request") is True:
       info("Registered notifications listener")
-      self.factory.database.updateDevice(self.identifier, self.name, self.device)
+      self.database.updateDevice(self.identifier, self.name, self.device)
 
-      for notification in self.factory.database.showNotifications(self.identifier):
+      for notification in self.database.showNotifications(self.identifier):
         cancel = int(notification[0])
         reference = notification[1]
 
@@ -182,7 +176,7 @@ class Konnect(LineReceiver):
           callLater(0.1, self.sendNotification, text, title, application, reference)
         else:
           self.sendCancel(reference)
-          self.factory.database.dismissNotification(self.identifier, reference)
+          self.database.dismissNotification(self.identifier, reference)
     else:
       debug("Ignoring unknown request")
 
@@ -224,7 +218,7 @@ class Konnect(LineReceiver):
       if packet.isType(PacketType.PAIR):
         self._handlePairing(packet)
       elif self.isTrusted():
-        if packet.isType(PacketType.REQUEST):
+        if packet.isType(PacketType.NOTIFICATION_REQUEST):
           self._handleNotify(packet)
         elif packet.isType(PacketType.PING):
           self.sendPing()
@@ -235,145 +229,6 @@ class Konnect(LineReceiver):
         self.status = InternalStatus.NOT_PAIRED
         pair = Packet.createPair(False)
         self._sendPacket(pair)
-
-
-class KonnectFactory(Factory):
-  protocol = Konnect
-  clients = set()
-
-  def __init__(self, database, identifier, name, options, transfer):
-    self.database = database
-    self.identifier = identifier
-    self.name = name
-    self.options = options
-    self.transfer = transfer
-
-    self.temp_dir = join(gettempdir(), "konnect_" + name)
-    makedirs(self.temp_dir, exist_ok=True)
-
-  def _findClient(self, identifier):
-    for client in self.clients:
-      if client.identifier == identifier:
-        return client
-
-    return None
-
-  def sendRing(self, identifier):
-    if not self.isDeviceTrusted(identifier):
-      return None
-
-    try:
-      self._findClient(identifier).sendRing()
-
-      return True
-    except AttributeError:
-      return False
-
-  def sendPing(self, identifier):
-    if not self.isDeviceTrusted(identifier):
-      return None
-
-    try:
-      self._findClient(identifier).sendPing()
-
-      return True
-    except AttributeError:
-      return False
-
-  def sendCustom(self, identifier, data):
-    if not self.isDeviceTrusted(identifier):
-      return None
-
-    try:
-      self._findClient(identifier).sendCustom(data)
-
-      return True
-    except:
-      return False
-
-  def sendNotification(self, identifier, text, title, application, reference, icon=None):
-    if not self.isDeviceTrusted(identifier):
-      return None
-
-    try:
-      client = self._findClient(identifier)
-
-      if not isinstance(reference, str) or len(reference) == 0:
-        reference = str(uuid4())
-
-      payload = None
-
-      if isfile(icon):
-        _, temp = mkstemp()
-
-        with Image.open(icon) as image:
-          if image.format != "PNG" or max(image.size) > MAX_ICON_SIZE:
-            image.thumbnail([MAX_ICON_SIZE] * 2, Resampling.LANCZOS)
-            image.save(temp, "PNG")
-          else:
-            copyfile(icon, temp)
-
-        digest = md5(open(temp, "rb").read(), usedforsecurity=False).hexdigest()
-        path = join(self.temp_dir, digest)
-        move(temp, path)
-
-        size = getsize(path)
-        port = self.transfer.reservePort(path)
-
-        if port:
-          payload = {"digest": digest, "size": size, "port": port}
-
-      self.database.persistNotification(identifier, text, title, application, reference)
-      client.sendNotification(text, title, application, reference, payload)
-
-      return True
-    except AttributeError:
-      return False
-
-  def sendCancel(self, identifier, reference):
-    if not self.isDeviceTrusted(identifier):
-      return None
-
-    try:
-      self._findClient(identifier).sendCancel(reference)
-
-      return True
-    except AttributeError:
-      self.database.cancelNotification(identifier, reference)
-
-      return False
-
-  def requestPair(self, identifier):
-    try:
-      self._findClient(identifier).requestPair()
-
-      return self.isDeviceTrusted(identifier)
-    except AttributeError:
-      return None
-
-  def requestUnpair(self, identifier):
-    try:
-      trusted = self.isDeviceTrusted(identifier)
-      self._findClient(identifier).requestUnpair()
-
-      return trusted
-    except AttributeError:
-      return None
-
-  def isDeviceTrusted(self, identifier):
-    return self.database.isDeviceTrusted(identifier)
-
-  def getDevices(self):
-    devices = {}
-
-    for trusted in self.database.getTrustedDevices():
-      devices[trusted[0]] = {"identifier": trusted[0], "name": trusted[1], "type": trusted[2], "reachable": False, "trusted": True}
-
-    for client in self.clients:
-      trusted = client.identifier in devices
-      devices[client.identifier] = {"identifier": client.identifier, "name": client.name, "type": client.device, "reachable": True, "trusted": trusted}
-
-    return devices
 
 
 class Discovery(DatagramProtocol):
@@ -463,21 +318,3 @@ class FileTransfer(Protocol, TimeoutMixin):
   def connectionLost(self, reason):
     self.setTimeout(None)
     self.factory.jobs[self.port] = None
-
-
-class TransferFactory(Factory):
-  protocol = FileTransfer
-  jobs = {}
-
-  def __init__(self, top_port, total):
-    for x in range(total):
-      self.jobs[top_port - x] = None
-
-  def reservePort(self, path):
-    for port, path2 in self.jobs.items():
-
-      if not path2:
-        self.jobs[port] = path
-        return port
-
-    return None

@@ -1,4 +1,5 @@
 from sqlite3 import OperationalError, connect
+from uuid import uuid4
 
 
 class Database:

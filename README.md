@@ -11,10 +11,10 @@ Konnect is based on the [KDE Connect](https://community.kde.org/KDEConnect) prot
 python3 -m venv venv
 
 # Wheels for systemd
-venv/bin/pip install "konnect[systemd] @ https://github.com/metallkopf/konnect/releases/download/0.1.6/konnect-0.1.6-py3-none-any.whl"
+venv/bin/pip install "konnect[systemd] @ https://github.com/metallkopf/konnect/releases/download/0.2.0/konnect-0.2.0-py3-none-any.whl"
 
 # Wheels for generic init
-venv/bin/pip install https://github.com/metallkopf/konnect/releases/download/0.1.6/konnect-0.1.6-py3-none-any.whl
+venv/bin/pip install https://github.com/metallkopf/konnect/releases/download/0.2.0/konnect-0.2.0-py3-none-any.whl
 
 # From source
 venv/bin/pip install git+https://github.com/metallkopf/konnect.git@master#egg=konnect
@@ -36,43 +36,57 @@ venv/bin/konnectd --name Test --receiver --admin-port 8080
 curl -s -X GET http://localhost:8080/device
 
 # CLI
-venv/bin/konnect --devices
-
-- user@remotehost: 00112233_4455_6677_8899-aabbccddeeff (Trusted: False, Reachable: True)
-- smartphone: abcdef0123456789 (Trusted: False, Reachable: True)
+venv/bin/konnect devices
+{
+  "devices": [
+    {
+      "identifier": "00112233_4455_6677_8899-aabbccddeeff",
+      "name": "server",
+      "trusted": true,
+      "reachable": true
+    },
+    {
+      "identifier": "abcdef0123456789",
+      "name": "phone",
+      "trusted": false,
+      "reachable": true
+    }
+  ],
+  "success": true
+}
 ```
 - Pair with device
 ```bash
 # Rest API
-curl -s -X POST http://localhost:8080/device/name/user@remotehost
+curl -s -X POST http://localhost:8080/pair/@phone
 
 # CLI
-venv/bin/konnect --name user@remotehost --command pair
+venv/bin/konnect pair --device @phone
 ```
 - Accept pairing request on remote host
 - Check successful pairing by sending ping
 ```bash
 # Rest API
-curl -s -X POST http://localhost:8080/ping/name/user@remotehost
+curl -s -X POST http://localhost:8080/ping/@phone
 
 # CLI
-venv/bin/konnect --name user@remotehost --command ping
+venv/bin/konnect ping --device @phone
 ```
 - Send notification
 ```bash
 # Rest API
-curl -s -X POST -d '{"application":"Package Manager","title":"Maintenance","text":"There are updates available!","reference":"update"}' http://localhost:8080/notification/name/user@remotehost
+curl -s -X POST -d '{"application":"Package Manager","title":"Maintenance","text":"There are updates available!","reference":"update"}' http://localhost:8080/notification/@phone
 
 # CLI
-venv/bin/konnect --name user@remotehost --command notification --title maintenance --text updates_available --application package_manager --reference update
+venv/bin/konnect notification --device @phone --title maintenance --text "updates available" --application package_manager --reference update
 ```
 - Unpair device
 ```bash
 # Rest API
-curl -s -X DELETE http://localhost:8080/device/name/user@remotehost
+curl -s -X DELETE http://localhost:8080/pair/@phone
 
 # CLI
-venv/bin/konnect --name user@remotehost --command unpair
+venv/bin/konnect unpair --unpair @phone
 ```
 
 ## Daemon usage
@@ -81,11 +95,11 @@ venv/bin/konnectd --help
 ```
 ```
 usage: konnectd [--name NAME] [--debug] [--discovery-port PORT] [--service-port PORT] [--transfer-port PORT]
-                [--max-transfer-ports NUM] [--admin-port PORT] [--config-dir DIR] [--receiver] [--service]
-                [--help] [--version]
+                [--max-transfer-ports NUM] [--admin-port PORT] [--admin-socket SOCK] [--admin-bind BIND]
+                [--config-dir DIR] [--receiver] [--service] [--help] [--version]
 
 options:
-  --name NAME           Device name (default: localhost)
+  --name NAME           Device name (default: computer)
   --debug               Show debug messages (default: False)
   --discovery-port PORT
                         Discovery port (default: 1716)
@@ -94,10 +108,12 @@ options:
   --max-transfer-ports NUM
                         Total open ports for transfer (default: 3)
   --admin-port PORT     API port (default: 8080)
+  --admin-socket SOCK   API unix socket (default: ${XDG_RUNTIME_DIR}/konnectd.sock)
+  --admin-bind BIND     API bind type (tcp or socket) (default: tcp)
   --config-dir DIR      Config directory (default: ~/.config/konnect)
   --receiver            Listen for new devices (default: False)
   --service             Send logs to journald (default: False)
-  --help                This help (default: False)
+  --help                This (default: False)
   --version             Version information (default: False)
 ```
 
@@ -105,53 +121,45 @@ options:
 | Method | Resource | Description | Parameters |
 | - | - | - | - |
 | GET | / | Application info | |
+| PUT | / | Announce identity | |
 | GET | /device | List devices | |
-| GET | /device/(identifier\|name)/:value | Device info | |
-| POST | /device/(identifier\|name)/:value | Pair | |
-| DELETE | /device/(identifier\|name)/:value | Unpair | |
-| PUT | /announce | Announce identity | |
-| POST | /ping/(identifier\|name)/:value | Ping device | |
-| POST | /ring/(identifier\|name)/:value | Ring device | |
-| POST | /notification/(identifier\|name)/:value | Send notification | text, title, application, reference (optional), icon (optional) |
-| DELETE | /notification/(identifier\|name)/:value/:reference | Cancel notification | |
-| POST | /custom/(identifier\|name)/:value | Custom packet (for testing only) | type, body |
+| GET | /device/\(@name\|identifier\) | Device info | |
+| GET | /command | List all commands | |
+| POST | /notification/\(@name\|identifier\) | Send notification | text, title, application, reference \(optional\), icon \(optional\) |
+| DELETE | /notification/\(@name\|identifier\)/\(reference\) | Cancel notification | |
+| POST | /pair/\(@name\|identifier\) | Pair | |
+| DELETE | /pair/\(@name\|identifier\) | Unpair | |
+| POST | /ping/\(@name\|identifier\) | Ping device | |
+| POST | /ring/\(@name\|identifier\) | Ring device | |
+| POST | /custom/\(@name\|identifier\) | Custom packet \(for testing only\) | type, body \(optional\) |
 
 ## CLI usage
 ```bash
-venv/bin/konnect --help
+venv/bin/konnect help
 ```
 ```
 usage: konnect [--port PORT] [--debug]
-               (--devices | --announce | --command {info,pair,unpair,ring,ping,notification,cancel,custom} | --help)
-               [--identifier ID | --name NAME] [--text TEXT] [--title TITLE] [--application APP] [--reference REF]
-               [--icon ICON] [--reference2 REF2] [--data DATA]
+               {announce,custom,device,devices,exec,notification,pair,ping,ring,unpair,version,help}
+               ...
 
 options:
   --port PORT           Port running the admin interface
   --debug               Show debug messages
 
-arguments:
-  --devices             List all devices
-  --announce            Search for devices in the network
-  --command {info,pair,unpair,ring,ping,notification,cancel,custom}
-  --help                This help
-
-command arguments:
-  --identifier ID       Device Identifier
-  --name NAME           Device Name
-
-notification arguments:
-  --text TEXT           The text of the notification
-  --title TITLE         The title of the notification
-  --application APP     The app that generated the notification
-  --reference REF       An (optional) unique notification id
-  --icon ICON           The icon of the notification (optional)
-
-cancel arguments:
-  --reference2 REF2     Notification id
-
-custom arguments:
-  --data DATA           Data (packet)
+actions:
+  {announce,custom,device,devices,exec,notification,pair,ping,ring,unpair,version,help}
+    announce            Announce your identity
+    custom              Send custom packet...
+    device              Show device info
+    devices             List devices
+    exec                Execute remote command...
+    notification        Send or cancel notification...
+    pair                Pair with device...
+    ping                Send ping...
+    ring                Ring my device...
+    unpair              Unpair trusted device...
+    version             Show server version
+    help                This
 ```
 
 ## Run as service
@@ -188,21 +196,18 @@ Tested *manually* on [kdeconnect](https://invent.kde.org/kde/kdeconnect-kde) 1.3
 
 ## Troubleshooting
 ### Read how to open firewall ports on
-- [KDE Connect's wiki](https://community.kde.org/KDEConnect#Troubleshooting)
+- [KDE Connect\'s wiki](https://community.kde.org/KDEConnect#Troubleshooting)
 ### Installation errors (required OS packages)
 - Debian-based: `sudo apt-get install libsystemd-dev pkg-config python3-venv`
 - RedHat-like: `sudo dnf install gcc pkg-config python3-devel systemd-devel`
 
 ## To-do (in no particular order)
-- PyPI installable
 - Unit testing
-- Improve command line tool
 - Periodically announce identity
 - Connect to devices instead of just listening
 - Better documentation
 - Type hinting?
 - Group notifications?
-- Run commands?
 - MDNS support?
 - Share an receive files?
 
