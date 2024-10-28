@@ -33,6 +33,7 @@ class Konnect(LineReceiver):
   name = "unnamed"
   device = "unknown"
   timeout = None
+  commands = {}
   database = None
 
   def __init__(self):
@@ -59,8 +60,8 @@ class Konnect(LineReceiver):
     ring = Packet.createRing()
     self._sendPacket(ring)
 
-  def sendPing(self):
-    ping = Packet.createPing()
+  def sendPing(self, msg=None):
+    ping = Packet.createPing(msg)
     self._sendPacket(ping)
 
   def sendNotification(self, text, title, application, reference, payload=None):
@@ -77,6 +78,18 @@ class Konnect(LineReceiver):
   def sendCancel(self, reference):
     cancel = Packet.createCancel(reference)
     self._sendPacket(cancel)
+
+  def sendCommands(self):
+    commands = {}
+    for row in self.database.listCommands(self.identifier):
+      commands[row["key"]] = {"name": row["name"], "command": row["command"]}
+
+    cmd = Packet.createCommands(commands)
+    self._sendPacket(cmd)
+
+  def sendRun(self, key):
+    cmd = Packet.createRun(key)
+    self._sendPacket(cmd)
 
   def sendPair(self):
     self.status = InternalStatus.REQUESTED
@@ -164,14 +177,14 @@ class Konnect(LineReceiver):
       info("Registered notifications listener")
       self.database.updateDevice(self.identifier, self.name, self.device)
 
-      for notification in self.database.showNotifications(self.identifier):
-        cancel = int(notification[0])
-        reference = notification[1]
+      for notification in self.database.listNotifications(self.identifier):
+        cancel = int(notification["cancel"])
+        reference = notification["reference"]
 
         if cancel == 0:
-          text = notification[2]
-          title = notification[3]
-          application = notification[4]
+          text = notification["text"]
+          title = notification["title"]
+          application = notification["application"]
 
           callLater(0.1, self.sendNotification, text, title, application, reference)
         else:
@@ -179,6 +192,30 @@ class Konnect(LineReceiver):
           self.database.dismissNotification(self.identifier, reference)
     else:
       debug("Ignoring unknown request")
+
+  def _handleCommand(self, packet):
+    if not packet.get("commandList"):
+      return
+
+    try:
+      self.commands = loads(packet.get("commandList"))
+    except Exception:
+      self.commands = {}
+
+  def _handleCommandRequest(self, packet):
+    if packet.get("requestCommandList"):
+      self.sendCommands()
+    elif packet.get("key"):
+      key = packet.get("key")
+      command = self.database.getCommand(self.identifier, key)
+
+      if not command:
+        warning(f"{key} is not a configured command")
+      else:
+        info(f"Running: {command}")
+        Popen([command], shell=True)
+    else:  # TODO setup?
+      pass
 
   def lineReceived(self, line):
     if self.status == InternalStatus.NOT_PAIRED and len(line) > BUFFER_SIZE:
@@ -221,7 +258,11 @@ class Konnect(LineReceiver):
         if packet.isType(PacketType.NOTIFICATION_REQUEST):
           self._handleNotify(packet)
         elif packet.isType(PacketType.PING):
-          self.sendPing()
+          self.sendPing(packet.get("message"))
+        elif packet.isType(PacketType.RUNCOMMAND):
+          self._handleCommand(packet)
+        elif packet.isType(PacketType.RUNCOMMAND_REQUEST):
+          self._handleCommandRequest(packet)
         else:
           warning(f"Discarding unsupported packet {packet.getType()} for {self.name}")
       else:

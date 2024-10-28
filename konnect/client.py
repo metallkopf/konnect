@@ -2,7 +2,7 @@
 
 import sys
 from argparse import ArgumentParser
-from json import dumps, loads
+from json import loads
 from os.path import join
 from traceback import print_exc
 
@@ -11,18 +11,58 @@ from requests import request
 from requests.exceptions import ConnectionError
 
 
+def print_out(data, level=0, parent=None):  # FIXME
+  if isinstance(data, dict):
+    for index, (key, value) in enumerate(data.items()):
+      if key == "success" and level == 0:
+        continue
+
+      if isinstance(value, (dict, list)):
+        if len(value):
+          print(f"{''.ljust(level)}{key}:")
+          print_out(value, level + 2)
+        else:
+          print(f"{''.ljust(level)}{key}: {value}")
+      else:
+        if parent == list and index == 0:
+          print(f"{''.ljust(level - 2)}- {key}: {value}")
+        else:
+          print(f"{''.ljust(level)}{key}: {value}")
+  elif isinstance(data, list):
+    for value in data:
+      if isinstance(value, dict):
+        print_out(value, level, list)
+      else:
+        print(f"{''.ljust(level - 2)}- {value}")
+
+
 def query(args):
   method = None
   url = f"http://localhost:{args.port}"
   data = {}
 
-  if args.action == "version":
+  if args.action == "info":
     method = "GET"
+  elif args.action == "version":
+    method = "GET"
+    url = join(url, "version")
   elif args.action == "devices":
     method = "GET"
     url = join(url, "device")
+    if args.device:
+      url = join(url, args.device)
   elif args.action == "announce":
     method = "PUT"
+  elif args.action == "commands":
+    method = "GET"
+    url = join(url, "command")
+    if args.device:
+      url = join(url, args.device)
+  elif args.action == "notifications":
+    method = "GET"
+    url = join(url, "notification")
+    if args.device:
+      url = join(url, args.device)
   else:
     if args.action == "device":
       method = "GET"
@@ -47,6 +87,14 @@ def query(args):
       except Exception:
         print("Error: invalid json")
         sys.exit(1)
+    elif args.action == "command":
+      if args.key:
+        method = "DELETE" if args.delete else "PUT"
+        url = join(url, "command", args.device, args.key)
+      else:
+        method = "POST"
+        url = join(url, "command", args.device)
+      data = {"name": args.name, "command": args.command}
     elif args.action == "notification":
       if args.cancel:
         method = "DELETE"
@@ -66,6 +114,12 @@ def query(args):
           except FileNotFoundError:
             print("Error: icon not found")
             sys.exit(1)
+    elif args.action == "exec":
+      method = "PATCH"
+      url = join(url, "command", args.device, args.key)
+    else:
+      print("Error: action not implemented")
+      sys.exit(1)
 
   if args.debug:
     print("REQUEST:", method, url)
@@ -90,8 +144,8 @@ def query(args):
     data = {}
     print()
 
-  print(dumps(data, indent=2))
-  sys.exit(int(data["success"]))
+  print_out(data)
+  sys.exit(int(not data["success"]))
 
 
 def main():
@@ -102,15 +156,34 @@ def main():
   subparsers = parser.add_subparsers(dest="action", title="actions")
   subparsers.add_parser("announce", help="Announce your identity")
 
+  command = subparsers.add_parser("command", help="Configure local commands...")
+  command.add_argument("--device", metavar="DEV", type=str, required=True, help="Device @name or id")
+  command.add_argument("--delete", action="store_true", help="Delete command")
+  is_delete = "--delete" in sys.argv
+  delete = command.add_argument_group("delete")
+  delete.add_argument("--key", type=str, required=is_delete, help="Key identifier")
+  details = command.add_argument_group("details")
+  details.add_argument("--name", type=str, required=not is_delete, help="Name to show")
+  details.add_argument("--command", metavar="CMD", type=str, required=not is_delete, help="Command to execute")
+
+  commands = subparsers.add_parser("commands", help="List all commands...")
+  commands.add_argument("--device", metavar="DEV", type=str, help="Device @name or id")
+
   custom = subparsers.add_parser("custom", help="Send custom packet...")
   custom.add_argument("--device", metavar="DEV", type=str, required=True, help="Device @name or id")
   custom.add_argument("--data", type=str, help="JSON string")
 
-  device = subparsers.add_parser("device", help="Show device info")  # FIXME
-  device.add_argument("--device", metavar="DEV", type=str, required=True, help="Device @name or id")
+  devices = subparsers.add_parser("devices", help="List all devices...")
+  devices.add_argument("--device", metavar="DEV", type=str, help="Device @name or id")
 
-  subparsers.add_parser("devices", help="List devices")
+  exec_ = subparsers.add_parser("exec", help="Execute remote command...")
+  exec_.add_argument("--device", metavar="DEV", type=str, required=True)
+  exec_.add_argument("--key", type=str, required=True, help="Key identifier")
 
+  subparsers.add_parser("info", help="Show server info")
+
+  notifications = subparsers.add_parser("notifications", help="List all notifications...")
+  notifications.add_argument("--device", metavar="DEV", type=str, help="Device @name or id")
 
   notification = subparsers.add_parser("notification", help="Send or cancel notification...")
   notification.add_argument("--device", metavar="DEV", type=str, required=True, help="Device @name or id")

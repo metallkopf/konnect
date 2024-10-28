@@ -11,6 +11,8 @@ class PacketType:
   PAIR = "kdeconnect.pair"
   PING = "kdeconnect.ping"
   RING = "kdeconnect.findmyphone.request"
+  RUNCOMMAND = "kdeconnect.runcommand"
+  RUNCOMMAND_REQUEST = "kdeconnect.runcommand.request"
 
 
 class Packet:
@@ -79,8 +81,10 @@ class Packet:
     packet.set("deviceName", name)
     packet.set("deviceType", Packet.DEVICE_TYPE)
     packet.set("tcpPort", port)
-    packet.set("incomingCapabilities", [PacketType.PING, PacketType.NOTIFICATION_REQUEST])
-    packet.set("outgoingCapabilities", [PacketType.RING, PacketType.NOTIFICATION, PacketType.PING])
+    packet.set("incomingCapabilities", [PacketType.PING, PacketType.NOTIFICATION_REQUEST,
+                                        PacketType.RUNCOMMAND_REQUEST, PacketType.RUNCOMMAND])
+    packet.set("outgoingCapabilities", [PacketType.RING, PacketType.NOTIFICATION, PacketType.PING,
+                                        PacketType.RUNCOMMAND])
 
     return packet
 
@@ -117,12 +121,32 @@ class Packet:
     return packet
 
   @staticmethod
-  def createPing():
-    return Packet(PacketType.PING)
+  def createPing(msg=None):
+    packet = Packet(PacketType.PING)
+
+    if msg:
+      packet.set("message", msg)
+
+    return packet
 
   @staticmethod
   def createRing():
     return Packet(PacketType.RING)
+
+  @staticmethod
+  def createCommands(commands):
+    packet = Packet(PacketType.RUNCOMMAND)
+    packet.set("canAddCommand", False)
+    packet.set("commandList", dumps(commands))
+
+    return packet
+
+  @staticmethod
+  def createRun(key):
+    packet = Packet(PacketType.RUNCOMMAND_REQUEST)
+    packet.set("key", key)
+
+    return packet
 
   @staticmethod
   def load(data):

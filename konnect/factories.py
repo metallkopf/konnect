@@ -28,11 +28,7 @@ class KonnectFactory(Factory):
     return None
 
   def getDevices(self):
-    devices = {}
-
-    for trusted in self.database.getTrustedDevices():
-      devices[trusted[0]] = {"identifier": trusted[0], "name": trusted[1], "type": trusted[2],
-                             "reachable": False, "trusted": True, "commands": {}}
+    devices = self.database.getTrustedDevices()
 
     for client in self.clients:
       trusted = client.identifier in devices
