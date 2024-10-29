@@ -5,11 +5,6 @@ class ApiError(Exception):
     self.parent = str(parent) if parent else None
 
 
-class UnknownError(ApiError):
-  def __init__(self, parent=None):
-    super().__init__("unknown error", 500, parent)
-
-
 class UnserializationError(ApiError):
   def __init__(self, parent=None):
     super().__init__("unserialization error", 400, parent)

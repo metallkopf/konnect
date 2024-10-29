@@ -8,6 +8,7 @@ from re import match
 from shutil import copyfile, move
 from tempfile import gettempdir, mkstemp
 from traceback import print_exc
+from urllib.parse import unquote_plus
 from uuid import uuid4
 
 from PIL import Image
@@ -41,7 +42,7 @@ CHECKS = {
 
 class API(Resource):
   isLeaf = True
-  PATTERN = r"^\/(?P<res>[a-z]+)\/(?P<dev>[\w+\.@\- ]+)((?:\/)(?P<key>[\w+\-]+))?$"
+  PATTERN = r"^\/(?P<res>[a-z]+)\/(?P<dev>@?.+?)((?:\/)(?P<key>=?.+?))?$"
 
   def __init__(self, konnect, discovery, database, debug):
     super().__init__()
@@ -55,7 +56,7 @@ class API(Resource):
 
   def _getDeviceId(self, item):
     key = "name" if item[0] == "@" else "identifier"
-    value = item[1:] if key == "name" else item
+    value = unquote_plus(item[1:] if key == "name" else item)
 
     for device in self.konnect.getDevices().values():
       if device[key] == value:
@@ -143,7 +144,7 @@ class API(Resource):
     if not client and checks[1]:
       raise DeviceNotReachableError()
 
-    key = matches["key"]
+    key = unquote_plus(matches["key"]) if matches["key"] else None
 
     if key and not checks[2]:
       raise NotImplementedError2()
@@ -165,11 +166,11 @@ class API(Resource):
     elif resource == "command" and method == "GET":
       return self._handleListCommands(identifier)
     elif resource == "command" and method == "POST":
-      return self._handleCreateCommand(identifier, data)
+      return self._handleCreateCommand(identifier, client, data)
     elif resource == "command" and method == "PUT":
-      return self._handleUpdateCommand(identifier, key, data)
+      return self._handleUpdateCommand(identifier, client, key, data)
     elif resource == "command" and method == "DELETE":
-      return self._handleDeleteCommand(identifier, key)
+      return self._handleDeleteCommand(identifier, client, key)
     elif resource == "command" and method == "PATCH":
       return self._handleExecuteCommand(client, key)
     elif resource == "custom" and method == "POST":
@@ -269,7 +270,7 @@ class API(Resource):
 
   def _handleDeleteNotification(self, identifier, client, reference=None):
     if not reference:
-      return {}, 501
+      raise ApiError("reference not found", 400)
 
     self.database.cancelNotification(identifier, reference)
 
@@ -281,25 +282,33 @@ class API(Resource):
   def _handleListCommands(self, identifier):
     return {"commands": self.database.listCommands(identifier)}, 200
 
-  def _handleCreateCommand(self, identifier, data):
+  def _handleCreateCommand(self, identifier, client, data):
     if not data.get("name") or not data.get("command"):
       raise ApiError("name or command not found", 400)
 
     key = str(uuid4())
     self.database.addCommand(identifier, key, data["name"], data["command"])
+
+    if client:
+      client.sendCommands()
+
     return {"key": key}, 201
 
-  def _handleUpdateCommand(self, identifier, key, data):
+  def _handleUpdateCommand(self, identifier, client, key, data):
     if not data.get("name") or not data.get("command"):
       raise ApiError("name or command not found", 400)
 
     if self.database.getCommand(identifier, key):
       self.database.updateCommand(identifier, key, data["name"], data["command"])
+
+      if client:
+        client.sendCommands()
+
       return {}, 200
 
     raise ApiError("not found", 404)
 
-  def _handleDeleteCommand(self, identifier, key=None):
+  def _handleDeleteCommand(self, identifier, client, key=None):
     if key:
       if self.database.getCommand(identifier, key):
         self.database.remCommand(identifier, key)
@@ -308,9 +317,21 @@ class API(Resource):
     else:
       self.database.remCommands(identifier)
 
+    if client:
+      client.sendCommands()
+
     return {}, 204
 
   def _handleExecuteCommand(self, client, key):
+    if key.startswith("="):
+      for key2, item in client.commands.items():
+        if item["name"] == key[1:]:
+          key = key2
+          break
+
+    if not client.commands.get(key):
+      raise ApiError("key not found", 404)
+
     client.sendRun(key)
     return {}, 200
 

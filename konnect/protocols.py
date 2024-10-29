@@ -81,6 +81,7 @@ class Konnect(LineReceiver):
 
   def sendCommands(self):
     commands = {}
+
     for row in self.database.listCommands(self.identifier):
       commands[row["key"]] = {"name": row["name"], "command": row["command"]}
 

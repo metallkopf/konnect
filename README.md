@@ -16,10 +16,10 @@ Konnect is based on the [KDE Connect](https://community.kde.org/KDEConnect) prot
 python3 -m venv venv
 
 # Wheels for systemd
-venv/bin/pip install "konnect[systemd] @ https://github.com/metallkopf/konnect/releases/download/0.2.0/konnect-0.2.0-py3-none-any.whl"
+venv/bin/pip install "konnect[systemd] @ https://github.com/metallkopf/konnect/releases/download/0.2.1/konnect-0.2.1-py3-none-any.whl"
 
 # Wheels for generic init
-venv/bin/pip install https://github.com/metallkopf/konnect/releases/download/0.2.0/konnect-0.2.0-py3-none-any.whl
+venv/bin/pip install https://github.com/metallkopf/konnect/releases/download/0.2.1/konnect-0.2.1-py3-none-any.whl
 
 # From source
 venv/bin/pip install git+https://github.com/metallkopf/konnect.git@master#egg=konnect
@@ -111,9 +111,9 @@ sudo systemctl enable konnect
 | GET | /command/\(@name\|identifier\) | List device commands | |
 | POST | /command/\(@name\|identifier\) | Add device command | name, command |
 | DELETE | /command/\(@name\|identifier\) | Remove all device commands | |
-| PUT | /command/\(@name\|identifier\)/\(key\) | Update device command | name, command |
-| DELETE | /command/\(@name\|identifier\)/\(key\) | Remove device command | |
-| PATCH | /command/\(@name\|identifier\)/\(key\) | Execute \(remote\) device command | |
+| PUT | /command/\(@name\|identifier\)/\(=name\|key\) | Update device command | name, command |
+| DELETE | /command/\(@name\|identifier\)/\(=name\|key\) | Remove device command | |
+| PATCH | /command/\(@name\|identifier\)/\(=name\|key\) | Execute \(remote\) device command | |
 | POST | /custom/\(@name\|identifier\) | Custom packet \(for testing only\) | type, body \(optional\) |
 | GET | /device | List all devices | |
 | GET | /device/\(@name\|identifier\) | Device info | |
@@ -193,12 +193,16 @@ devices:
 
 ```bash
 ./venv/bin/konnect pair --device @computer
+# or
+./venv/bin/konnect pair --device f81d4fae-7dec-11d0-a765-00a0c91e6bf6
 ```
 
 ### Ping device
 
 ```bash
 ./venv/bin/konnect ping --device @computer
+# or
+./venv/bin/konnect pair --device f81d4fae-7dec-11d0-a765-00a0c91e6bf6
 ```
 
 ### Send notification
@@ -221,13 +225,15 @@ key: update
 ### Execute (remote) command
 
 ```bash
+./venv/bin/konnect exec --device @computer --key =kernel
+# or
 ./venv/bin/konnect exec --device @computer --key 00112233-4455-6677-8899-aabbccddeeff
 ```
 
 ### Add (local) command
 
 ```bash
-./venv/bin/konnect command --device @computer --name "reboot" --command "sudo reboot"
+./venv/bin/konnect command --device @computer --name reboot --command "sudo reboot"
 ```
 
 ```yaml

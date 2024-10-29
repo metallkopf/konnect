@@ -161,7 +161,7 @@ def main():
   command.add_argument("--delete", action="store_true", help="Delete command")
   is_delete = "--delete" in sys.argv
   delete = command.add_argument_group("delete")
-  delete.add_argument("--key", type=str, required=is_delete, help="Key identifier")
+  delete.add_argument("--key", type=str, required=is_delete, help="Command =name or key")
   details = command.add_argument_group("details")
   details.add_argument("--name", type=str, required=not is_delete, help="Name to show")
   details.add_argument("--command", metavar="CMD", type=str, required=not is_delete, help="Command to execute")
@@ -178,7 +178,7 @@ def main():
 
   exec_ = subparsers.add_parser("exec", help="Execute remote command...")
   exec_.add_argument("--device", metavar="DEV", type=str, required=True)
-  exec_.add_argument("--key", type=str, required=True, help="Key identifier")
+  exec_.add_argument("--key", type=str, required=True, help="Command =name or key")
 
   subparsers.add_parser("info", help="Show server info")
 
