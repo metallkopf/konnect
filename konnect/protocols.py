@@ -122,7 +122,7 @@ class Konnect(LineReceiver):
     self.name = packet.get("deviceName", "unnamed")
     self.device = packet.get("deviceType", "unknown")
 
-    if packet.get("protocolVersion") == Packet.PROTOCOL_VERSION:
+    if packet.get("protocolVersion") >= Packet.PROTOCOL_VERSION:
       info("Starting client SSL (but I'm the server TCP socket)")
       self.transport.startTLS(self.factory.options, False)
       info("Socket succesfully established an SSL connection")
