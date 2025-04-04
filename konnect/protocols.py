@@ -18,6 +18,7 @@ MIN_PORT = 1716
 MAX_PORT = 1764
 DELAY_BETWEEN_PACKETS = 0.5
 BUFFER_SIZE = 8192
+TIMESTAMP_DIFFERENCE = 1800
 
 
 class InternalStatus:
@@ -53,7 +54,7 @@ class Konnect(LineReceiver):
     pass
 
   def _sendPacket(self, data):
-    debug(f"SendTCP({self.address}) - {data}")
+    debug(f"SendTCP({self.address}, {self.transport.TLS}) - {data}")
     self.sendLine(bytes(data))
 
   def sendRing(self):
@@ -110,7 +111,7 @@ class Konnect(LineReceiver):
     self.database.unpairDevice(self.identifier)
 
   def _cancelTimeout(self):
-    if self.timeout is not None and self.timeout.active():
+    if self.timeout and self.timeout.active():
       self.timeout.cancel()
       self.timeout = None
 
@@ -122,7 +123,7 @@ class Konnect(LineReceiver):
     self.name = packet.get("deviceName", "unnamed")
     self.device = packet.get("deviceType", "unknown")
 
-    if packet.get("protocolVersion") >= Packet.PROTOCOL_VERSION:
+    if packet.get("protocolVersion") >= Packet.PROTOCOL_VERSION - 1:
       info("Starting client SSL (but I'm the server TCP socket)")
       self.transport.startTLS(self.factory.options, False)
       info("Socket succesfully established an SSL connection")
@@ -138,7 +139,7 @@ class Konnect(LineReceiver):
   def _handlePairing(self, packet):
     self._cancelTimeout()
 
-    if packet.get("pair") is True:
+    if packet.get("pair"):
       if self.status == InternalStatus.REQUESTED:
         info("Pair answer")
         certificate = Certificate(self.transport.getPeerCertificate()).dumpPEM()
@@ -170,11 +171,11 @@ class Konnect(LineReceiver):
       self.database.unpairDevice(self.identifier)
 
   def _handleNotify(self, packet):
-    if packet.get("cancel") is not None:
+    if packet.get("cancel"):
       reference = packet.get("cancel")
       debug(f"Dismiss notification request for {reference}")
       self.database.dismissNotification(self.identifier, reference)
-    elif packet.get("request") is True:
+    elif packet.get("request"):
       info("Registered notifications listener")
       self.database.updateDevice(self.identifier, self.name, self.device)
 
@@ -227,7 +228,7 @@ class Konnect(LineReceiver):
     try:
       data = loads(line)
       packet = Packet.load(data)
-      debug(f"RecvTCP({self.address}) - {packet}")
+      debug(f"RecvTCP({self.address}, {self.transport.TLS}) - {packet}")
     except (JSONDecodeError, TypeError) as e:
       error(f"Unserialization error: {line}")
       exception(e)
@@ -255,6 +256,10 @@ class Konnect(LineReceiver):
 
       if packet.isType(PacketType.PAIR):
         self._handlePairing(packet)
+      elif packet.isType(PacketType.IDENTITY):  # and packet.get("protocolVersion") == Packet.PROTOCOL_VERSION:
+        identity = Packet.createIdentity(self.factory.identifier, self.factory.name,
+                                         self.transport.getHost().port, packet.get("protocolVersion"))
+        self._sendPacket(identity)
       elif self.isTrusted():
         if packet.isType(PacketType.NOTIFICATION_REQUEST):
           self._handleNotify(packet)
@@ -285,9 +290,9 @@ class Discovery(DatagramProtocol):
     self.transport.setBroadcastAllowed(True)
     self.announceIdentity()
 
-  def announceIdentity(self, address="<broadcast>"):
+  def announceIdentity(self, address="<broadcast>", version=None):
     try:
-      packet = Packet.createIdentity(self.identifier, self.name, self.service_port)
+      packet = Packet.createIdentity(self.identifier, self.name, self.service_port, version)
       info("Broadcasting identity packet")
       debug(f"SendUDP({address}:{MIN_PORT}) - {packet}")
       self.transport.write(bytes(packet), (address, MIN_PORT))
@@ -314,10 +319,12 @@ class Discovery(DatagramProtocol):
       debug(f"Discarding second UDP packet from the same device {packet.get('deviceId')} received too quickly")
     elif int(packet.get("tcpPort", 0)) < MIN_PORT or int(packet.get("tcpPort", 0)) > MAX_PORT:
       debug("TCP port outside of kdeconnect's range")
+    elif Packet.PROTOCOL_VERSION - 1 > packet.get("protocolVersion", 0):
+      info(f"Refusing to connect to a device using an older protocol version. Ignoring {packet.get('deviceId')}")
     else:
       self.last_packets[packet.get("deviceId")] = now
       debug(f"Received UDP identity packet from {addr[0]}, trying reverse connection")
-      self.announceIdentity(addr[0])
+      self.announceIdentity(addr[0], packet.get("protocolVersion"))
 
 
 class FileTransfer(Protocol, TimeoutMixin):

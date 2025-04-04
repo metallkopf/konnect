@@ -69,10 +69,10 @@ def query(args):
       url = join(url, "device", args.device)
     elif args.action == "pair":
       method = "POST"
-      url = join(url, "device", args.device)
+      url = join(url, "pair", args.device)
     elif args.action == "unpair":
       method = "DELETE"
-      url = join(url, "device", args.device)
+      url = join(url, "unpair", args.device)
     elif args.action == "ring":
       method = "POST"
       url = join(url, "ring", args.device)

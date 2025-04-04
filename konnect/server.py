@@ -23,7 +23,7 @@ from konnect.protocols import MAX_PORT, MIN_PORT, Discovery
 def start(args):
   level = DEBUG if args.debug else INFO
 
-  if args.service is True:
+  if args.service:
     try:
       from systemd.journal import JournalHandler
 

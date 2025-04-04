@@ -188,7 +188,7 @@ class API(Resource):
   def _handleAnnounce(self):
     try:
       self.discovery.announceIdentity()
-      return {}, 204
+      return {}, 200
     except Exception:
       raise ApiError("failed to broadcast identity packet", 500)
 
@@ -277,7 +277,7 @@ class API(Resource):
     if client:
       client.sendCancel(reference)
 
-    return {}, 204
+    return {}, 200
 
   def _handleListCommands(self, identifier):
     return {"commands": self.database.listCommands(identifier)}, 200
@@ -320,7 +320,7 @@ class API(Resource):
     if client:
       client.sendCommands()
 
-    return {}, 204
+    return {}, 200
 
   def _handleExecuteCommand(self, client, key):
     if key.startswith("="):

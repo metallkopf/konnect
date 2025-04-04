@@ -16,7 +16,7 @@ class PacketType:
 
 
 class Packet:
-  PROTOCOL_VERSION = 7
+  PROTOCOL_VERSION = 8
   DEVICE_TYPE = "desktop"
 
   def __init__(self, type_=None):
@@ -74,9 +74,9 @@ class Packet:
     return sub(r"[^A-Za-z0-9_]", "_", value)
 
   @staticmethod
-  def createIdentity(identifier, name, port):
+  def createIdentity(identifier, name, port, version=None):
     packet = Packet(PacketType.IDENTITY)
-    packet.set("protocolVersion", Packet.PROTOCOL_VERSION)
+    packet.set("protocolVersion", version or Packet.PROTOCOL_VERSION)
     packet.set("deviceId", identifier)
     packet.set("deviceName", name)
     packet.set("deviceType", Packet.DEVICE_TYPE)
@@ -92,6 +92,7 @@ class Packet:
   def createPair(pairing):
     packet = Packet(PacketType.PAIR)
     packet.set("pair", pairing)
+    packet.set("timestamp", round(time()))
 
     return packet
 

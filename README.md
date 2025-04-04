@@ -1,8 +1,10 @@
 # Konnect - headless kde connect
 
-Konnect is based on the [KDE Connect](https://community.kde.org/KDEConnect) protocol and allows a non-interactive enviroment (headless server) to send notifications to your devices via Rest API or a *simple* CLI
+Konnect is based on the [KDE Connect](https://community.kde.org/KDEConnect) protocol and allows a non-interactive environment (headless server) to send notifications to your devices via Rest API or a *simple* CLI
 
-> Warning: Breaking chanches between versions 0.1.x and 0.2.x on the client tool and rest api.
+> There are issues with the current versions of KDE Connect, see Troubleshooting.
+
+> Breaking changes between konnect versions 0.1.x and 0.2.x on the client tool and rest api.
 
 ## Prerequisites
 
@@ -16,10 +18,10 @@ Konnect is based on the [KDE Connect](https://community.kde.org/KDEConnect) prot
 python3 -m venv venv
 
 # Wheels for systemd
-venv/bin/pip install "konnect[systemd] @ https://github.com/metallkopf/konnect/releases/download/0.2.1/konnect-0.2.1-py3-none-any.whl"
+venv/bin/pip install "konnect[systemd] @ https://github.com/metallkopf/konnect/releases/download/0.3.0/konnect-0.3.0-py3-none-any.whl"
 
 # Wheels for generic init
-venv/bin/pip install https://github.com/metallkopf/konnect/releases/download/0.2.1/konnect-0.2.1-py3-none-any.whl
+venv/bin/pip install https://github.com/metallkopf/konnect/releases/download/0.3.0/konnect-0.3.0-py3-none-any.whl
 
 # From source
 venv/bin/pip install git+https://github.com/metallkopf/konnect.git@master#egg=konnect
@@ -256,6 +258,13 @@ key: 03000200-0400-0500-0006-000700080009
 
 ## Troubleshooting
 
+###  KDE Connect doesn't find any device
+
+Starting with desktop versions 25.03.80 and android 1.33.0, the protocol version was increased, which had the side effect that untrusted devices running older versions of the software cannot be found.
+
+- For desktop: if you can't find your device, hit "Refresh" on KDE Connect in System Settings. Konnect will send an identity packet matching that protocol version.
+- For android: if installed initially with a version older than 1.24.0 you might need to delete the app data and re-pair your devices. The app device id is too short for the current protocol.
+
 ### Read how to open firewall ports on
 
 - [KDE Connect\'s wiki](https://community.kde.org/KDEConnect#Troubleshooting)
@@ -265,7 +274,7 @@ key: 03000200-0400-0500-0006-000700080009
 - Debian-based: `sudo apt-get install libsystemd-dev pkg-config python3-venv`
 - RedHat-like: `sudo dnf install gcc pkg-config python3-devel systemd-devel`
 
-## To-do (in no particular order)
+## To-Do (in no particular order)
 
 - Unit testing
 - Periodically announce identity
@@ -275,6 +284,8 @@ key: 03000200-0400-0500-0006-000700080009
 - Group notifications?
 - MDNS support?
 - Share an receive files?
+- Share clipboard?
+- MPRIS support?
 
 ## Development
 
@@ -295,10 +306,6 @@ venv/bin/python -m build --wheel
 
 venv/bin/twine check dist/*
 ```
-
-## Contributor(s)
-
-- coxtor
 
 ## License
 
