@@ -19,6 +19,9 @@ class Database:
       "CREATE TABLE commands (key TEXT PRIMARY KEY, identifier TEXT, name TEXT, command TEXT, "
       "FOREIGN KEY (identifier) REFERENCES trusted_devices (identifier) ON DELETE CASCADE)",
     ],
+    [
+      "ALTER TABLE trusted_devices ADD COLUMN path TEXT",
+    ],
   ]
 
   def __init__(self, path):
@@ -78,12 +81,12 @@ class Database:
       return False
 
   def getTrustedDevices(self):
-    query = "SELECT identifier, name, type FROM trusted_devices"
+    query = "SELECT identifier, name, type, path FROM trusted_devices"
     items = {}
 
     for row in self._execute(query):
       items[row["identifier"]] = {"identifier": row["identifier"], "name": row["name"], "type": row["type"],
-                                  "reachable": False, "trusted": True, "commands": {}}
+                                  "reachable": False, "trusted": True, "commands": {}, "path": row["path"]}
 
     return items
 
@@ -153,3 +156,14 @@ class Database:
     query = "SELECT d.identifier, d.name AS device, c.key, c.name, c.command FROM commands c " \
       "INNER JOIN trusted_devices d ON (c.identifier = d.identifier) ORDER BY 2, 4"
     return self._execute(query)
+
+  def getPath(self, identifier):
+    query = "SELECT path FROM trusted_devices WHERE identifier = ?"
+    try:
+      return self._execute(query, (identifier, ))[0]["path"]
+    except IndexError:
+      return None
+
+  def setPath(self, identifier, path=None):
+    query = "UPDATE trusted_devices SET path = ? WHERE identifier = ?"
+    self._execute(query, (path, identifier))

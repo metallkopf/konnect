@@ -13,11 +13,9 @@ readme = {file = "README.md", content-type = "text/markdown"}
 dynamic = ["version"]
 urls = {Source = "https://github.com/metallkopf/konnect"}
 dependencies = [
-  "cryptography",
   "pillow",
   "pyopenssl",
   "requests",
-  "service-identity",
   "twisted"
 ]
 classifiers = [
@@ -37,7 +35,6 @@ classifiers = [
 
 [project.optional-dependencies]
 devel = ["build", "flake8", "isort", "pytest", "twine"]
-systemd = ["systemd-python"]
 
 [project.scripts]
 konnect = "konnect.client:main"

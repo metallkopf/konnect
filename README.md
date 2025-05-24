@@ -4,24 +4,27 @@ Konnect is based on the [KDE Connect](https://community.kde.org/KDEConnect) prot
 
 > There are issues with the current versions of KDE Connect, see Troubleshooting.
 
+> Breaking changes in 0.4.0 `--admin-bind` and `--admin-socket` merged into `--admin-port`, `--receiver` is now `--discovery-port 1716`, `--transfer-port` and `--max-transfer-ports` has been removed as ports are allocated automatically, and `--service` has been deprecated and his systemd dependency removed.
+
 > Breaking changes between konnect versions 0.1.x and 0.2.x on the client tool and rest api.
 
-## Prerequisites
+## Supported functionality (plugins):
 
-- Python 3.10+
-- Systemd (optional)
+* Ping
+* Ring my phone
+* Send notificacions (icon optional)
+* Run commands
+* Host remote commands
+* ~~Share and~~ Receive (files)
 
 ## Installation
 
 ```bash
 # Create virtualenv
-python3 -m venv venv
+python -m venv venv
 
-# Wheels for systemd
-venv/bin/pip install "konnect[systemd] @ https://github.com/metallkopf/konnect/releases/download/0.3.0/konnect-0.3.0-py3-none-any.whl"
-
-# Wheels for generic init
-venv/bin/pip install https://github.com/metallkopf/konnect/releases/download/0.3.0/konnect-0.3.0-py3-none-any.whl
+# Default install (wheels)
+venv/bin/pip install https://github.com/metallkopf/konnect/releases/download/0.4.0/konnect-0.4.0-py3-none-any.whl
 
 # From source
 venv/bin/pip install git+https://github.com/metallkopf/konnect.git@master#egg=konnect
@@ -36,25 +39,17 @@ venv/bin/konnectd --help
 ```
 
 ```
-usage: konnectd [--name NAME] [--debug] [--discovery-port PORT] [--service-port PORT] [--transfer-port PORT] [--max-transfer-ports NUM] [--admin-port PORT] [--admin-socket SOCK] [--admin-bind BIND] [--config-dir DIR]
-                [--receiver] [--service] [--help] [--version]
+usage: konnectd [--name NAME] [--debug] [--discovery-port PORT] [--service-port PORT] [--admin-port PORT] [--config-dir DIR] [--timestamps] [--version]
 
 options:
   --name NAME           Device name (default: HOSTNAME)
   --debug               Show debug messages (default: False)
   --discovery-port PORT
-                        Discovery port (default: 1716)
+                        Discovery port (default: 1764)
   --service-port PORT   Service port (default: 1764)
-  --transfer-port PORT  Transfer port (top) (default: 1763)
-  --max-transfer-ports NUM
-                        Total open ports for transfer (default: 3)
-  --admin-port PORT     API port (default: 8080)
-  --admin-socket SOCK   API unix socket (default: ${XDG_RUNTIME_DIR}/konnectd.sock)
-  --admin-bind BIND     API bind type (tcp or socket) (default: tcp)
+  --admin-port PORT     API (tcp) port or unix socket (default: 8080)
   --config-dir DIR      Config directory (default: ~/.config/konnect)
-  --receiver            Listen for new devices (default: False)
-  --service             Send logs to journald (default: False)
-  --help                This (default: False)
+  --timestamps          Show timestamps (default: False)
   --version             Version information (default: False)
 ```
 
@@ -64,11 +59,11 @@ options:
 # With KDE Connect installed (admin interface by default on port 8080)
 venv/bin/konnectd --name Test
 
-# With KDE Connect installed (socket by default on ${XDG_RUNTIME_DIR}/konnectd.sock)
-venv/bin/konnectd --name Test --admin-bind socket
+# With KDE Connect installed (bind to socket)
+venv/bin/konnectd --name Test --admin-port /run/user/1000/konnectd.sock
 
 # Without KDE Connect installed (listen for announce)
-venv/bin/konnectd --name Test --receiver
+venv/bin/konnectd --name Test --discovery-port 1716
 ```
 
 ### Run as service
@@ -86,7 +81,7 @@ User=user
 Restart=always
 Type=simple
 WorkingDirectory=/home/user/konnect
-ExecStart=/home/user/konnect/venv/bin/konnectd --receiver --service
+ExecStart=/home/user/konnect/venv/bin/konnectd --discovery-port 1716
 
 [Install]
 WantedBy=multi-user.target
@@ -126,6 +121,7 @@ sudo systemctl enable konnect
 | DELETE | /pair/\(@name\|identifier\) | Unpair | |
 | POST | /ping/\(@name\|identifier\) | Ping device | |
 | POST | /ring/\(@name\|identifier\) | Ring device | |
+| PATCH | /share/\(@name\|identifier\) | Receive files | path (optional) |
 
 ## Client
 
@@ -138,14 +134,14 @@ This utility can be used alone but requires the packages `requests` and `PIL` to
 ```
 
 ```
-usage: konnect [--port PORT] [--debug] {announce,command,commands,custom,devices,exec,info,notifications,notification,pair,ping,ring,unpair,version,help} ...
+usage: konnect [--port PORT] [--debug] {announce,command,commands,custom,devices,exec,info,notifications,notification,pair,ping,receive,ring,unpair,version,help} ...
 
 options:
   --port PORT           Port running the admin interface
   --debug               Show debug messages
 
 actions:
-  {announce,command,commands,custom,devices,exec,info,notifications,notification,pair,ping,ring,unpair,version,help}
+  {announce,command,commands,custom,devices,exec,info,notifications,notification,pair,ping,receive,ring,unpair,version,help}
     announce            Announce your identity
     command             Configure local commands...
     commands            List all commands...
@@ -157,10 +153,10 @@ actions:
     notification        Send or cancel notification...
     pair                Pair with device...
     ping                Send ping...
+    receive             Receive files...
     ring                Ring my device...
     unpair              Unpair trusted device...
     version             Show server version
-    help                This
 ```
 
 ### List devices
@@ -174,8 +170,8 @@ devices:
 - identifier: f81d4fae-7dec-11d0-a765-00a0c91e6bf6
   name: computer
   type: desktop
-  reachable: true
-  trusted: true
+  reachable: True
+  trusted: True
   commands:
     00112233-4455-6677-8899-aabbccddeeff:
       name: kernel
@@ -183,12 +179,14 @@ devices:
     550e8400-e29b-41d4-a716-446655440000:
       name: who
       command: whoami
+  path: None
 - identifier: 9c5b94b1-35ad-49bb-b118-8e8fc24abf80
   name: phone
   type: smartphone
-  reachable: false
-  trusted: true
+  reachable: False
+  trusted: True
   commands: {}
+  path: ~/Downloads/phone
 ```
 
 ### Pair device
@@ -211,7 +209,8 @@ devices:
 
 ```bash
 ./venv/bin/konnect notification --device @computer --application "Package Manager" \
-  --title Maintenance --text "There are updates available!" --reference update
+  --title Maintenance --text "There are updates available!" --reference update \
+  --icon /usr/share/icons/oxygen/base/32x32/apps/system-software-update.png
 ```
 
 ```yaml
@@ -256,6 +255,12 @@ key: 03000200-0400-0500-0006-000700080009
   command: sudo reboot
 ```
 
+### Receive (accept) files
+
+```bash
+./venv/bin/konnect receive --device @computer --path ~/Downloads/computer
+```
+
 ## Troubleshooting
 
 ###  KDE Connect doesn't find any device
@@ -268,24 +273,6 @@ Starting with desktop versions 25.03.80 and android 1.33.0, the protocol version
 ### Read how to open firewall ports on
 
 - [KDE Connect\'s wiki](https://community.kde.org/KDEConnect#Troubleshooting)
-
-### Installation errors (required OS packages)
-
-- Debian-based: `sudo apt-get install libsystemd-dev pkg-config python3-venv`
-- RedHat-like: `sudo dnf install gcc pkg-config python3-devel systemd-devel`
-
-## To-Do (in no particular order)
-
-- Unit testing
-- Periodically announce identity
-- Connect to devices instead of just listening
-- Better documentation
-- Type hinting?
-- Group notifications?
-- MDNS support?
-- Share an receive files?
-- Share clipboard?
-- MPRIS support?
 
 ## Development
 

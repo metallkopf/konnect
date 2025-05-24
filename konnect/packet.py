@@ -13,6 +13,7 @@ class PacketType:
   RING = "kdeconnect.findmyphone.request"
   RUNCOMMAND = "kdeconnect.runcommand"
   RUNCOMMAND_REQUEST = "kdeconnect.runcommand.request"
+  SHARE = "kdeconnect.share.request"
 
 
 class Packet:
@@ -82,7 +83,8 @@ class Packet:
     packet.set("deviceType", Packet.DEVICE_TYPE)
     packet.set("tcpPort", port)
     packet.set("incomingCapabilities", [PacketType.PING, PacketType.NOTIFICATION_REQUEST,
-                                        PacketType.RUNCOMMAND_REQUEST, PacketType.RUNCOMMAND])
+                                        PacketType.RUNCOMMAND_REQUEST, PacketType.RUNCOMMAND,
+                                        PacketType.SHARE])
     packet.set("outgoingCapabilities", [PacketType.RING, PacketType.NOTIFICATION, PacketType.PING,
                                         PacketType.RUNCOMMAND])
 

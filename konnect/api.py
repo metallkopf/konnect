@@ -1,9 +1,9 @@
 from hashlib import md5
 from json import dumps, loads
 from json.decoder import JSONDecodeError
-from logging import debug, info
+from logging import debug, info, warning
 from os import makedirs
-from os.path import getsize, isfile, join
+from os.path import expanduser, expandvars, getsize, isdir, isfile, join
 from re import match
 from shutil import copyfile, move
 from tempfile import gettempdir, mkstemp
@@ -13,13 +13,20 @@ from uuid import uuid4
 
 from PIL import Image
 from PIL.Image import Resampling
+from twisted.internet import reactor
 from twisted.internet.address import IPv4Address
+from twisted.internet.error import CannotListenError
+from twisted.internet.protocol import Factory
 from twisted.web.resource import Resource
 
 from konnect import __version__
 from konnect.exceptions import ApiError, DeviceNotReachableError, DeviceNotTrustedError, NotImplementedError2, \
   UnserializationError
+from konnect.protocols import MAX_TCP_PORT, MIN_TCP_PORT, ShareSend
 
+
+MIN_XFER_PORT = MIN_TCP_PORT + 1
+MAX_XFER_PORT = MAX_TCP_PORT - 1
 
 MAX_ICON_SIZE = 96
 CHECKS = {
@@ -36,6 +43,7 @@ CHECKS = {
   ("PUT", "command"): (True, False, True),
   ("DELETE", "command"): (True, False, True),
   ("PATCH", "command"): (True, True, True),
+  ("PATCH", "share"): (True, False, False),
   ("POST", "custom"): (True, True, False),
 }
 
@@ -50,6 +58,7 @@ class API(Resource):
     self.discovery = discovery
     self.database = database
     self.debug = debug
+    self.listeners = {}
 
     self.temp_dir = join(gettempdir(), "konnect_" + konnect.name)
     makedirs(self.temp_dir, exist_ok=True)
@@ -68,7 +77,7 @@ class API(Resource):
     request.setHeader(b"content-type", b"application/json")
     uri = request.uri.decode()
     method = request.method.decode()
-    content = request.content.read() if request.getHeader("content-length") else b"{}"
+    content = request.content.read().decode() if request.getHeader("content-length") else "{}"
 
     debug(f"ReqHTTP({method} {uri}) - Body({content})")
 
@@ -173,6 +182,8 @@ class API(Resource):
       return self._handleDeleteCommand(identifier, client, key)
     elif resource == "command" and method == "PATCH":
       return self._handleExecuteCommand(client, key)
+    elif resource == "share" and method == "PATCH":
+      return self._handleUpdateShare(identifier, data)
     elif resource == "custom" and method == "POST":
       return self._handleCustomPacket(client, data)
 
@@ -256,9 +267,7 @@ class API(Resource):
       path = join(self.temp_dir, digest)
       move(temp, path)
 
-      port = self.konnect.transfer.reservePort(path)
-
-      if port:
+      if port := self._startListener(path):
         payload = {"digest": digest, "size": getsize(path), "port": port}
 
     self.database.persistNotification(identifier, text, title, application, reference)
@@ -267,6 +276,30 @@ class API(Resource):
       client.sendNotification(text, title, application, reference, payload)
 
     return {"reference": reference}, 201
+
+  def _startListener(self, path):
+    factory = Factory()
+    factory.protocol = ShareSend
+    factory.path = path
+    factory._stopListener = self._stopListener
+
+    for port in range(MIN_XFER_PORT, MAX_XFER_PORT):
+      try:
+        listener = reactor.listenSSL(port, factory, self.konnect.options, backlog=0, interface="0.0.0.0")
+        debug(f"Transfer listening on port {port}")
+        factory.port = port
+        self.listeners[port] = listener
+
+        return port
+      except CannotListenError:
+        pass
+
+    warning("Transfer couldn't find an available port")
+    raise ApiError("no available port", 400)
+
+  def _stopListener(self, port):
+    self.listeners[port].stopListening()
+    del self.listeners[port]
 
   def _handleDeleteNotification(self, identifier, client, reference=None):
     if not reference:
@@ -334,6 +367,14 @@ class API(Resource):
 
     client.sendRun(key)
     return {}, 200
+
+  def _handleUpdateShare(self, identifier, data):
+    if data.get("path") and not isdir(expanduser(expandvars(data.get("path")))):
+      raise ApiError("path not found", 400)
+
+    self.database.setPath(identifier, data["path"])
+
+    return {}, 201
 
   def _handleCustomPacket(self, client, data):
     if not self.debug:

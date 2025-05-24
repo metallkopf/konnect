@@ -8,7 +8,7 @@ User=user
 Restart=always
 Type=simple
 WorkingDirectory=/home/user/konnect
-ExecStart=/home/user/konnect/venv/bin/konnectd --receiver --service
+ExecStart=/home/user/konnect/venv/bin/konnectd --discovery-port 1716
 
 [Install]
 WantedBy=multi-user.target

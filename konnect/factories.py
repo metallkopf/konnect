@@ -1,24 +1,17 @@
 from twisted.internet.protocol import Factory
 
-from konnect.protocols import FileTransfer, Konnect
+from konnect.protocols import Konnect
 
 
 class KonnectFactory(Factory):
   protocol = Konnect
   clients = set()
 
-  def __init__(self, database, identifier, name, options, transfer):
+  def __init__(self, database, identifier, name, options):
     self.database = database
     self.identifier = identifier
     self.name = name
     self.options = options
-    self.transfer = transfer
-
-  def buildProtocol(self, addr):
-    proto = super().buildProtocol(addr)
-    proto.database = self.database
-
-    return proto
 
   def findClient(self, identifier):
     for client in self.clients:
@@ -31,27 +24,12 @@ class KonnectFactory(Factory):
     devices = self.database.getTrustedDevices()
 
     for client in self.clients:
-      trusted = client.identifier in devices
-      devices[client.identifier] = {"identifier": client.identifier, "name": client.name,
-                                    "type": client.device, "reachable": True, "trusted": trusted,
-                                    "commands": client.commands}
+      if client.identifier in devices:
+        devices[client.identifier]["commands"] = client.commands
+        devices[client.identifier]["reachable"] = True
+      else:
+        devices[client.identifier] = {"identifier": client.identifier, "name": client.name,
+                                      "type": client.device, "reachable": True, "trusted": False,
+                                      "commands": client.commands, "path": None}
 
     return devices
-
-
-class TransferFactory(Factory):
-  protocol = FileTransfer
-  jobs = {}
-
-  def __init__(self, top_port, total):
-    for x in range(total):
-      self.jobs[top_port - x] = None
-
-  def reservePort(self, path):
-    for port, path2 in self.jobs.items():
-
-      if not path2:
-        self.jobs[port] = path
-        return port
-
-    return None

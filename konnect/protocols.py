@@ -1,11 +1,15 @@
 from json import loads
 from json.decoder import JSONDecodeError
 from logging import debug, error, exception, info, warning
-from os.path import basename, isfile
+from os import makedirs, remove
+from os.path import basename, expanduser, expandvars, getsize, isdir, isfile, join, splitext
+from shutil import move
 from subprocess import Popen
+from tempfile import NamedTemporaryFile
 from time import time
 
-from twisted.internet.protocol import DatagramProtocol, Protocol
+from twisted.internet import reactor
+from twisted.internet.protocol import ClientFactory, DatagramProtocol, Protocol
 from twisted.internet.reactor import callLater
 from twisted.internet.ssl import Certificate
 from twisted.protocols.basic import LineReceiver
@@ -14,22 +18,20 @@ from twisted.protocols.policies import TimeoutMixin
 from konnect.packet import Packet, PacketType
 
 
-MIN_PORT = 1716
-MAX_PORT = 1764
+MIN_TCP_PORT = 1716
+MAX_TCP_PORT = 1764
 DELAY_BETWEEN_PACKETS = 0.5
 BUFFER_SIZE = 8192
 TIMESTAMP_DIFFERENCE = 1800
 
-
-class InternalStatus:
-  NOT_PAIRED = 1
-  REQUESTED = 2
-  PAIRED = 3
+NOT_PAIRED = 1
+REQUESTED = 2
+PAIRED = 3
 
 
 class Konnect(LineReceiver):
   delimiter = b"\n"
-  status = InternalStatus.NOT_PAIRED
+  status = NOT_PAIRED
   identifier = None
   name = "unnamed"
   device = "unknown"
@@ -45,6 +47,7 @@ class Konnect(LineReceiver):
     self.factory.clients.add(self)
     peer = self.transport.getPeer()
     self.address = f"{peer.host}:{peer.port}"
+    self.database = self.factory.database
 
   def connectionLost(self, reason):
     info(f"Device {self.name} disconnected")
@@ -54,7 +57,7 @@ class Konnect(LineReceiver):
     pass
 
   def _sendPacket(self, data):
-    debug(f"SendTCP({self.address}, {self.transport.TLS}) - {data}")
+    debug(f"SendTCP({self.address}, {self.isSecure()}) - {data}")
     self.sendLine(bytes(data))
 
   def sendRing(self):
@@ -94,18 +97,18 @@ class Konnect(LineReceiver):
     self._sendPacket(cmd)
 
   def sendPair(self):
-    self.status = InternalStatus.REQUESTED
+    self.status = REQUESTED
     self._cancelTimeout()
     self.timeout = callLater(30, self.sendUnpair)
     pair = Packet.createPair(True)
     self._sendPacket(pair)
 
   def sendUnpair(self):
-    if self.status == InternalStatus.REQUESTED:
+    if self.status == REQUESTED:
       info("Pairing request timed out")
 
     self._cancelTimeout()
-    self.status = InternalStatus.NOT_PAIRED
+    self.status = NOT_PAIRED
     pair = Packet.createPair(False)
     self._sendPacket(pair)
     self.database.unpairDevice(self.identifier)
@@ -140,10 +143,10 @@ class Konnect(LineReceiver):
     self._cancelTimeout()
 
     if packet.get("pair"):
-      if self.status == InternalStatus.REQUESTED:
+      if self.status == REQUESTED:
         info("Pair answer")
         certificate = Certificate(self.transport.getPeerCertificate()).dumpPEM()
-        self.status = InternalStatus.PAIRED
+        self.status = PAIRED
 
         if self.isTrusted():
           self.database.updateDevice(self.identifier, self.name, self.device)
@@ -153,7 +156,7 @@ class Konnect(LineReceiver):
         info("Pair request")
         pair = Packet.createPair(False)
 
-        if self.status == InternalStatus.PAIRED or self.isTrusted():
+        if self.status == PAIRED or self.isTrusted():
           info("I'm already paired, but they think I'm not")
           self.database.updateDevice(self.identifier, self.name, self.device)
           pair.set("pair", True)
@@ -164,10 +167,10 @@ class Konnect(LineReceiver):
     else:
       info("Unpair request")
 
-      if self.status == InternalStatus.REQUESTED:
+      if self.status == REQUESTED:
         info("Canceled by other peer")
 
-      self.status = InternalStatus.NOT_PAIRED
+      self.status = NOT_PAIRED
       self.database.unpairDevice(self.identifier)
 
   def _handleNotify(self, packet):
@@ -180,10 +183,9 @@ class Konnect(LineReceiver):
       self.database.updateDevice(self.identifier, self.name, self.device)
 
       for notification in self.database.listNotifications(self.identifier):
-        cancel = int(notification["cancel"])
         reference = notification["reference"]
 
-        if cancel == 0:
+        if int(notification["cancel"]):
           text = notification["text"]
           title = notification["title"]
           application = notification["application"]
@@ -219,8 +221,26 @@ class Konnect(LineReceiver):
     else:  # TODO setup?
       pass
 
+  def _handleShare(self, packet):
+    if not packet.get("filename") or not packet.data.get("payloadSize") or \
+      not packet.data.get("payloadTransferInfo", {}).get("port"):
+      return
+
+    if path := self.database.getPath(self.identifier):
+      factory = ClientFactory()
+      factory.protocol = ShareReceive
+      factory.filename = packet.get("filename")
+      factory.payloadSize = packet.data["payloadSize"]
+      factory.path = expanduser(expandvars(path))
+
+      reactor.connectSSL(self.transport.getPeer().host, packet.data["payloadTransferInfo"]["port"],
+                         factory, self.factory.options)
+
+  def isSecure(self):
+    return self.transport.TLS
+
   def lineReceived(self, line):
-    if self.status == InternalStatus.NOT_PAIRED and len(line) > BUFFER_SIZE:
+    if self.status == NOT_PAIRED and len(line) > BUFFER_SIZE:
       warning(f"Suspiciously long identity package received. Closing connection. {self.address}")
       self.transport.abortConnection()
       return
@@ -228,7 +248,7 @@ class Konnect(LineReceiver):
     try:
       data = loads(line)
       packet = Packet.load(data)
-      debug(f"RecvTCP({self.address}, {self.transport.TLS}) - {packet}")
+      debug(f"RecvTCP({self.address}, {self.isSecure()}) - {packet}")
     except (JSONDecodeError, TypeError) as e:
       error(f"Unserialization error: {line}")
       exception(e)
@@ -240,21 +260,18 @@ class Konnect(LineReceiver):
     #   self.transport.abortConnection()
     #   return
 
-    if not self.transport.TLS:
+    if not self.isSecure():
       if packet.isType(PacketType.IDENTITY):
         self._handleIdentity(packet)
       else:
         warning(f"Device {self.name} not identified, ignoring non encrypted packet {packet.getType()}")
     else:
-      certificate = Certificate(self.transport.getPeerCertificate())
-      identifier = certificate.getSubject().commonName.decode()
+      identifier = Certificate(self.transport.getPeerCertificate()).getSubject().commonName.decode()
 
       if self.identifier != identifier:
         warning(f"DeviceID in cert doesn't match deviceID in identity packet. {self.identifier} vs {identifier}")
         self.transport.abortConnection()
-        return
-
-      if packet.isType(PacketType.PAIR):
+      elif packet.isType(PacketType.PAIR):
         self._handlePairing(packet)
       elif packet.isType(PacketType.IDENTITY):  # and packet.get("protocolVersion") == Packet.PROTOCOL_VERSION:
         identity = Packet.createIdentity(self.factory.identifier, self.factory.name,
@@ -269,20 +286,21 @@ class Konnect(LineReceiver):
           self._handleCommand(packet)
         elif packet.isType(PacketType.RUNCOMMAND_REQUEST):
           self._handleCommandRequest(packet)
+        elif packet.isType(PacketType.SHARE):
+          self._handleShare(packet)
         else:
           warning(f"Discarding unsupported packet {packet.getType()} for {self.name}")
       else:
         warning(f"Device {self.name} not paired, ignoring packet {packet.getType()}")
-        self.status = InternalStatus.NOT_PAIRED
+        self.status = NOT_PAIRED
         pair = Packet.createPair(False)
         self._sendPacket(pair)
 
 
 class Discovery(DatagramProtocol):
-  def __init__(self, identifier, name, discovery_port, service_port):
+  def __init__(self, identifier, name, service_port):
     self.identifier = identifier
     self.name = name
-    self.discovery_port = discovery_port
     self.service_port = service_port
     self.last_packets = {}
 
@@ -294,8 +312,8 @@ class Discovery(DatagramProtocol):
     try:
       packet = Packet.createIdentity(self.identifier, self.name, self.service_port, version)
       info("Broadcasting identity packet")
-      debug(f"SendUDP({address}:{MIN_PORT}) - {packet}")
-      self.transport.write(bytes(packet), (address, MIN_PORT))
+      debug(f"SendUDP({address}:{MIN_TCP_PORT}) - {packet}")
+      self.transport.write(bytes(packet), (address, MIN_TCP_PORT))
     except OSError:
       warning("Failed to broadcast identity packet")
 
@@ -317,7 +335,7 @@ class Discovery(DatagramProtocol):
       debug("Ignoring my own broadcast")
     elif self.last_packets.get(packet.get("deviceId"), 0) + DELAY_BETWEEN_PACKETS > now:
       debug(f"Discarding second UDP packet from the same device {packet.get('deviceId')} received too quickly")
-    elif int(packet.get("tcpPort", 0)) < MIN_PORT or int(packet.get("tcpPort", 0)) > MAX_PORT:
+    elif int(packet.get("tcpPort", 0)) < MIN_TCP_PORT or int(packet.get("tcpPort", 0)) > MAX_TCP_PORT:
       debug("TCP port outside of kdeconnect's range")
     elif Packet.PROTOCOL_VERSION - 1 > packet.get("protocolVersion", 0):
       info(f"Refusing to connect to a device using an older protocol version. Ignoring {packet.get('deviceId')}")
@@ -327,43 +345,64 @@ class Discovery(DatagramProtocol):
       self.announceIdentity(addr[0], packet.get("protocolVersion"))
 
 
-class FileTransfer(Protocol, TimeoutMixin):
-  def __init__(self):
-    self.address = None
-    self.port = None
+class ShareSend(Protocol, TimeoutMixin):
+  def __del__(self):
+    callLater(1, self.factory._stopListener, self.factory.port)
 
   def connectionMade(self):
-    self.transport.setTcpNoDelay(True)
-    self.transport.setTcpKeepAlive(0)
-    peer = self.transport.getPeer()
-    self.address = f"{peer.host}:{peer.port}"
-    self.port = self.transport.getHost().port
+    address = f"{self.transport.getPeer().host}:{self.transport.getPeer().port}"
+    debug(f"Transfer({address}) - File({basename(self.factory.path)}, {getsize(self.factory.path)})")
 
-    self.sendFile()
-
-  def sendFile(self):
-    path = self.factory.jobs.get(self.port, "")
-    debug(f"Transfer({self.address}) - File({basename(path)})")
-
-    if not isfile(path):
-      self.setTimeout(0)
-      return
-
-    with open(path, "rb") as handle:
-      while True:
-        chunk = handle.read(2048)
-
-        if not chunk:
-          break
-
+    with open(self.factory.path, "rb") as f:
+      while chunk := f.read(16384):
         self.transport.write(chunk)
 
-    self.transport.loseConnection()
-    self.setTimeout(3)
+    self.setTimeout(1)
 
   def timeoutConnection(self):
-    self.transport.abortConnection()
+    try:
+      self.transport.abortConnection()
+    except Exception:
+      pass
+
+
+class ShareReceive(Protocol, TimeoutMixin):
+  def connectionMade(self):
+    self.tempname = NamedTemporaryFile(delete=False)
+    info(f"Receiving file {self.factory.filename}")
+
+  def dataReceived(self, data):
+    self.tempname.write(data)
 
   def connectionLost(self, reason):
-    self.setTimeout(None)
-    self.factory.jobs[self.port] = None
+    if self.tempname.tell() == self.factory.payloadSize:
+      if not isdir(self.factory.path):
+        makedirs(self.factory.path, exist_ok=True)
+
+      if path := self.suggestName():
+        debug(f"Finished transfer {path}")
+        move(self.tempname.name, path)
+        return
+      else:
+        pass  # FIXME
+    else:
+      warning(f"Received incomplete file ({self.tempname.tell()}/{self.factory.payloadSize} bytes), deleting")
+
+    remove(self.tempname.name)
+
+  def suggestName(self):
+    path = join(self.factory.path, self.factory.filename)
+
+    if not isfile(path):
+      return path
+
+    debug("Filename already present")
+    name, ext = splitext(self.factory.filename)
+
+    for i in range(1, 9999):
+      path = join(self.factory.path, f"{name} ({i}){ext}")
+
+      if not isfile(path):
+        return path
+
+    return None

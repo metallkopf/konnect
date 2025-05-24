@@ -3,10 +3,10 @@
 import sys
 from argparse import ArgumentParser
 from json import loads
-from os.path import join
+from os.path import expanduser, expandvars, isdir, join
 from traceback import print_exc
 
-from PIL import Image
+from PIL import Image, UnidentifiedImageError
 from requests import request
 from requests.exceptions import ConnectionError
 
@@ -94,7 +94,8 @@ def query(args):
       else:
         method = "POST"
         url = join(url, "command", args.device)
-      data = {"name": args.name, "command": args.command}
+      data["name"] = args.name
+      data["command"] = args.command
     elif args.action == "notification":
       if args.cancel:
         method = "DELETE"
@@ -102,18 +103,33 @@ def query(args):
       else:
         method = "POST"
         url = join(url, "notification", args.device)
-        data = {"text": args.text, "title": args.title, "application": args.application, "reference": args.reference}
+        data["text"] = args.text
+        data["title"] = args.title
+        data["application"] = args.application
+        data["reference"] = args.reference
 
         if args.icon:
           try:
             with Image.open(args.icon):
               data["icon"] = args.icon
-          except ValueError:
+          except (ValueError, UnidentifiedImageError):
             print("Error: unsupported icon format")
             sys.exit(1)
           except FileNotFoundError:
             print("Error: icon not found")
             sys.exit(1)
+    elif args.action == "receive":
+      if args.stop:
+        data["path"] = None
+      else:
+        data["path"] = expanduser(expandvars(args.path))
+
+        if not isdir(data["path"]):
+          print("Error: directory not found")
+          sys.exit(1)
+
+      method = "PATCH"
+      url = join(url, "share", args.device)
     elif args.action == "exec":
       method = "PATCH"
       url = join(url, "command", args.device, args.key)
@@ -157,60 +173,66 @@ def main():
   subparsers.add_parser("announce", help="Announce your identity")
 
   command = subparsers.add_parser("command", help="Configure local commands...")
-  command.add_argument("--device", metavar="DEV", type=str, required=True, help="Device @name or id")
+  command.add_argument("--device", metavar="DEV", required=True, help="Device @name or id")
   command.add_argument("--delete", action="store_true", help="Delete command")
   is_delete = "--delete" in sys.argv
   delete = command.add_argument_group("delete")
-  delete.add_argument("--key", type=str, required=is_delete, help="Command =name or key")
+  delete.add_argument("--key", required=is_delete, help="Command =name or key")
   details = command.add_argument_group("details")
-  details.add_argument("--name", type=str, required=not is_delete, help="Name to show")
-  details.add_argument("--command", metavar="CMD", type=str, required=not is_delete, help="Command to execute")
+  details.add_argument("--name", required=not is_delete, help="Name to show")
+  details.add_argument("--command", metavar="CMD", required=not is_delete, help="Command to execute")
 
   commands = subparsers.add_parser("commands", help="List all commands...")
-  commands.add_argument("--device", metavar="DEV", type=str, help="Device @name or id")
+  commands.add_argument("--device", metavar="DEV", help="Device @name or id")
 
   custom = subparsers.add_parser("custom", help="Send custom packet...")
-  custom.add_argument("--device", metavar="DEV", type=str, required=True, help="Device @name or id")
-  custom.add_argument("--data", type=str, help="JSON string")
+  custom.add_argument("--device", metavar="DEV", required=True, help="Device @name or id")
+  custom.add_argument("--data", help="JSON string")
 
   devices = subparsers.add_parser("devices", help="List all devices...")
-  devices.add_argument("--device", metavar="DEV", type=str, help="Device @name or id")
+  devices.add_argument("--device", metavar="DEV", help="Device @name or id")
 
   exec_ = subparsers.add_parser("exec", help="Execute remote command...")
-  exec_.add_argument("--device", metavar="DEV", type=str, required=True)
-  exec_.add_argument("--key", type=str, required=True, help="Command =name or key")
+  exec_.add_argument("--device", metavar="DEV", required=True)
+  exec_.add_argument("--key", required=True, help="Command =name or key")
 
   subparsers.add_parser("info", help="Show server info")
 
   notifications = subparsers.add_parser("notifications", help="List all notifications...")
-  notifications.add_argument("--device", metavar="DEV", type=str, help="Device @name or id")
+  notifications.add_argument("--device", metavar="DEV", help="Device @name or id")
 
   notification = subparsers.add_parser("notification", help="Send or cancel notification...")
-  notification.add_argument("--device", metavar="DEV", type=str, required=True, help="Device @name or id")
+  notification.add_argument("--device", metavar="DEV", required=True, help="Device @name or id")
   notification.add_argument("--cancel", action="store_true", help="Cancel notification")
   is_cancel = "--cancel" in sys.argv
   cancel = notification.add_argument_group("cancel")
-  cancel.add_argument("--reference", type=str, required=is_cancel, help="Reference")
+  cancel.add_argument("--reference", required=is_cancel, help="Reference")
   message = notification.add_argument_group("message")
-  message.add_argument("--title", type=str, required=not is_cancel, help="Title")
-  message.add_argument("--text", type=str, required=not is_cancel, help="Text")
-  message.add_argument("--application", type=str, required=not is_cancel, help="Application")
-  message.add_argument("--icon", type=str, help="Icon (filename)")
+  message.add_argument("--title", required=not is_cancel, help="Title")
+  message.add_argument("--text", required=not is_cancel, help="Text")
+  message.add_argument("--application", required=not is_cancel, help="Application")
+  message.add_argument("--icon", help="Icon (filename)")
 
   pair = subparsers.add_parser("pair", help="Pair with device...")
-  pair.add_argument("--device", metavar="DEV", type=str, required=True, help="Device @name or id")
+  pair.add_argument("--device", metavar="DEV", required=True, help="Device @name or id")
 
   ping = subparsers.add_parser("ping", help="Send ping...")
-  ping.add_argument("--device", metavar="DEV", type=str, required=True, help="Device @name or id")
+  ping.add_argument("--device", metavar="DEV", required=True, help="Device @name or id")
+
+  receive = subparsers.add_parser("receive", help="Receive files...")
+  receive.add_argument("--device", metavar="DEV", required=True, help="Device @name or id")
+  receive.add_argument("--stop", action="store_true", help="Stop reception")
+  is_stop = "--stop" in sys.argv
+  receive.add_argument("--path", required=not is_stop, default=None, help="Directory to store files")
 
   ring = subparsers.add_parser("ring", help="Ring my device...")
-  ring.add_argument("--device", metavar="DEV", type=str, required=True, help="Device @name or id")
+  ring.add_argument("--device", metavar="DEV", required=True, help="Device @name or id")
 
   unpair = subparsers.add_parser("unpair", help="Unpair trusted device...")
-  unpair.add_argument("--device", metavar="DEV", type=str, required=True, help="Device @name or id")
+  unpair.add_argument("--device", metavar="DEV", required=True, help="Device @name or id")
 
   subparsers.add_parser("version", help="Show server version")
-  subparsers.add_parser("help", help="This")
+  subparsers.add_parser("help")
 
   args = parser.parse_args()
 
